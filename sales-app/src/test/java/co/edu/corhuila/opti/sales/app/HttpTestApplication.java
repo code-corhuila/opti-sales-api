@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import co.edu.corhuila.opti.sales.adapter.in.http.PublicPaths;
 import co.edu.corhuila.opti.sales.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases;
 import co.edu.corhuila.opti.sales.testsupport.Fixtures;
 import co.edu.corhuila.opti.sales.testsupport.TestClock;
@@ -50,5 +51,10 @@ class HttpTestApplication {
     @Bean
     InvoiceUseCases invoiceUseCases(Fixtures.Sales sales) {
         return sales.invoices();
+    }
+
+    @Bean
+    ReportUseCases reportUseCases(Fixtures.Sales sales) {
+        return sales.reports();
     }
 }

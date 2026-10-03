@@ -24,7 +24,7 @@ import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
 public class JdbcWorkOrderRepository implements WorkOrderRepository {
 
     private static final String COLUMNS = """
-            id, number, patient_id, reference, status, total_cents, created_at, updated_at""";
+            id, number, patient_id, reference, status, total_cents, seller_id, created_at, updated_at""";
     private static final String ITEM_COLUMNS = """
             id, work_order_id, frame_id, reservation_id, sku, description, quantity, unit_price_cents,
             subtotal_cents""";
@@ -38,11 +38,11 @@ public class JdbcWorkOrderRepository implements WorkOrderRepository {
     @Override
     public void insert(WorkOrder o) {
         jdbc.sql("INSERT INTO work_order (" + COLUMNS + ") VALUES (:id, :number, :patient, :reference, :status,"
-                        + " :total, :createdAt, :updatedAt)")
+                        + " :total, :seller, :createdAt, :updatedAt)")
                 .param("id", o.id()).param("number", o.number()).param("patient", o.patientId())
                 .param("reference", o.reference()).param("status", o.status().name())
-                .param("total", o.totalCents()).param("createdAt", Sql.ts(o.createdAt()))
-                .param("updatedAt", Sql.ts(o.updatedAt()))
+                .param("total", o.totalCents()).param("seller", o.sellerId())
+                .param("createdAt", Sql.ts(o.createdAt())).param("updatedAt", Sql.ts(o.updatedAt()))
                 .update();
         int position = 0;
         for (WorkOrderItem item : o.items()) {
@@ -132,16 +132,17 @@ public class JdbcWorkOrderRepository implements WorkOrderRepository {
         return new Header(rs.getObject("id", UUID.class), rs.getString("number"),
                 rs.getObject("patient_id", UUID.class), rs.getString("reference"),
                 WorkOrderStatus.valueOf(rs.getString("status")), rs.getLong("total_cents"),
-                Sql.instant(rs, "created_at"), Sql.instant(rs, "updated_at"));
+                rs.getObject("seller_id", UUID.class), Sql.instant(rs, "created_at"), Sql.instant(rs, "updated_at"));
     }
 
     /** The order row before its lines are attached. */
     private record Header(UUID id, String number, UUID patientId, String reference, WorkOrderStatus status,
-                          long totalCents, java.time.Instant createdAt, java.time.Instant updatedAt) {
+                          long totalCents, UUID sellerId, java.time.Instant createdAt,
+                          java.time.Instant updatedAt) {
 
         WorkOrder withItems(List<WorkOrderItem> items) {
-            return WorkOrder.rehydrate(id, number, patientId, reference, status, items, totalCents, createdAt,
-                    updatedAt);
+            return WorkOrder.rehydrate(id, number, patientId, reference, status, items, totalCents, sellerId,
+                    createdAt, updatedAt);
         }
     }
 }

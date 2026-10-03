@@ -12,14 +12,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases.InvoiceFilter;
 import co.edu.corhuila.opti.sales.application.port.in.PageQuery;
 import co.edu.corhuila.opti.sales.application.port.in.PageResult;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.SalesSummary;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases.WorkOrderFilter;
 import co.edu.corhuila.opti.sales.application.port.out.InvoiceRepository;
 import co.edu.corhuila.opti.sales.application.port.out.NumberSequence;
 import co.edu.corhuila.opti.sales.application.port.out.PaymentRepository;
+import co.edu.corhuila.opti.sales.application.port.out.SalesReportRepository;
 import co.edu.corhuila.opti.sales.application.port.out.WorkOrderRepository;
 import co.edu.corhuila.opti.sales.domain.model.Invoice;
 import co.edu.corhuila.opti.sales.domain.model.Payment;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
+import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
 
 /** In-memory fakes of the sales stores, used to test the core and the HTTP adapter without a database. */
 public final class InMemorySales {
@@ -67,6 +70,31 @@ public final class InMemorySales {
         @Override
         public void update(WorkOrder order) {
             byId.put(order.id(), order);
+        }
+
+        List<WorkOrder> all() {
+            return List.copyOf(byId.values());
+        }
+    }
+
+    /** Revenue reports, aggregated over the same orders a test already opened. */
+    public static class Reports implements SalesReportRepository {
+
+        private final Orders orders;
+
+        public Reports(Orders orders) {
+            this.orders = orders;
+        }
+
+        @Override
+        public SalesSummary aggregate(UUID sellerId, java.time.Instant from, java.time.Instant to) {
+            List<WorkOrder> matches = orders.all().stream()
+                    .filter(o -> o.status() != WorkOrderStatus.CANCELLED)
+                    .filter(o -> sellerId == null || sellerId.equals(o.sellerId()))
+                    .filter(o -> from == null || !o.createdAt().isBefore(from))
+                    .filter(o -> to == null || o.createdAt().isBefore(to))
+                    .toList();
+            return new SalesSummary(matches.size(), matches.stream().mapToLong(WorkOrder::totalCents).sum());
         }
     }
 
