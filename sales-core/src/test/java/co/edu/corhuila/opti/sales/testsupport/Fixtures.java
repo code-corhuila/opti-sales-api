@@ -6,6 +6,7 @@ import java.util.UUID;
 import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases;
+import co.edu.corhuila.opti.sales.application.port.out.PaymentGateway;
 import co.edu.corhuila.opti.sales.application.usecase.InvoiceService;
 import co.edu.corhuila.opti.sales.application.usecase.ReportService;
 import co.edu.corhuila.opti.sales.application.usecase.WorkOrderService;
@@ -26,6 +27,10 @@ public final class Fixtures {
     }
 
     public static Sales sales(TestClock clock) {
+        return sales(clock, AlwaysApprovePaymentGateway.INSTANCE);
+    }
+
+    public static Sales sales(TestClock clock, PaymentGateway gateway) {
         var orders = new InMemorySales.Orders();
         var invoices = new InMemorySales.Invoices();
         var payments = new InMemorySales.Payments();
@@ -34,7 +39,7 @@ public final class Fixtures {
         var unit = new DirectUnitOfWork(keys);
         return new Sales(
                 new WorkOrderService(orders, invoices, new InMemorySales.Numbers(), keys, ids, unit, clock),
-                new InvoiceService(invoices, payments, keys, ids, unit, clock),
+                new InvoiceService(invoices, payments, gateway, keys, ids, unit, clock),
                 new ReportService(new InMemorySales.Reports(orders)));
     }
 
