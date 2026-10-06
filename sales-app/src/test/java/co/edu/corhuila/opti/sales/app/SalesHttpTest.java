@@ -45,8 +45,9 @@ class SalesHttpTest extends ContractChecks {
 
     @Override
     protected List<String> invalidBodyFields() {
-        return List.of("patientId", "reference", "items[0].frameId", "items[0].reservationId", "items[0].sku",
-                "items[0].description", "items[0].quantity", "items[0].unitPriceCents");
+        return List.of("patientId", "reference", "items[0].productType", "items[0].productId",
+                "items[0].reservationId", "items[0].sku", "items[0].description", "items[0].quantity",
+                "items[0].unitPriceCents");
     }
 
     // ---- opening --------------------------------------------------------------------------
@@ -235,7 +236,8 @@ class SalesHttpTest extends ContractChecks {
 
     private static String orderJson(String reference, long unitPriceCents, int quantity) {
         return """
-                {"patientId":"%s","reference":"%s","items":[{"frameId":"%s","reservationId":"%s","sku":"RB5228-2000",
+                {"patientId":"%s","reference":"%s","items":[{"productType":"FRAME","productId":"%s",
+                 "reservationId":"%s","sku":"RB5228-2000",
                  "description":"Frame Ray-Ban RB5228","quantity":%d,"unitPriceCents":%d}]}"""
                 .formatted(PATIENT, reference, UUID.randomUUID(), UUID.randomUUID(), quantity, unitPriceCents);
     }

@@ -16,6 +16,7 @@ import co.edu.corhuila.opti.sales.application.port.in.PageQuery;
 import co.edu.corhuila.opti.sales.application.port.in.PageResult;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases.WorkOrderFilter;
 import co.edu.corhuila.opti.sales.application.port.out.WorkOrderRepository;
+import co.edu.corhuila.opti.sales.domain.model.ProductType;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderItem;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
@@ -26,8 +27,8 @@ public class JdbcWorkOrderRepository implements WorkOrderRepository {
     private static final String COLUMNS = """
             id, number, patient_id, reference, status, total_cents, seller_id, created_at, updated_at""";
     private static final String ITEM_COLUMNS = """
-            id, work_order_id, frame_id, reservation_id, sku, description, quantity, unit_price_cents,
-            subtotal_cents""";
+            id, work_order_id, product_type, product_id, reservation_id, sku, description, quantity,
+            unit_price_cents, subtotal_cents""";
 
     private final JdbcClient jdbc;
 
@@ -46,9 +47,11 @@ public class JdbcWorkOrderRepository implements WorkOrderRepository {
                 .update();
         int position = 0;
         for (WorkOrderItem item : o.items()) {
-            jdbc.sql("INSERT INTO work_order_item (" + ITEM_COLUMNS + ", position) VALUES (:id, :order, :frame,"
-                            + " :reservation, :sku, :description, :quantity, :price, :subtotal, :position)")
-                    .param("id", item.id()).param("order", o.id()).param("frame", item.frameId())
+            jdbc.sql("INSERT INTO work_order_item (" + ITEM_COLUMNS + ", position) VALUES (:id, :order,"
+                            + " :productType, :productId, :reservation, :sku, :description, :quantity, :price,"
+                            + " :subtotal, :position)")
+                    .param("id", item.id()).param("order", o.id())
+                    .param("productType", item.productType().name()).param("productId", item.productId())
                     .param("reservation", item.reservationId()).param("sku", item.sku())
                     .param("description", item.description()).param("quantity", item.quantity())
                     .param("price", item.unitPriceCents()).param("subtotal", item.subtotalCents())
@@ -123,9 +126,10 @@ public class JdbcWorkOrderRepository implements WorkOrderRepository {
     }
 
     private static WorkOrderItem item(ResultSet rs) throws SQLException {
-        return new WorkOrderItem(rs.getObject("id", UUID.class), rs.getObject("frame_id", UUID.class),
-                rs.getObject("reservation_id", UUID.class), rs.getString("sku"), rs.getString("description"),
-                rs.getInt("quantity"), rs.getLong("unit_price_cents"), rs.getLong("subtotal_cents"));
+        return new WorkOrderItem(rs.getObject("id", UUID.class), ProductType.valueOf(rs.getString("product_type")),
+                rs.getObject("product_id", UUID.class), rs.getObject("reservation_id", UUID.class),
+                rs.getString("sku"), rs.getString("description"), rs.getInt("quantity"),
+                rs.getLong("unit_price_cents"), rs.getLong("subtotal_cents"));
     }
 
     private static Header header(ResultSet rs, int row) throws SQLException {
