@@ -26,7 +26,7 @@ error uses `{"error", "message", "details"?, "traceId"}`. Full specification: [`
 | Method and path | Roles | Answers |
 |---|---|---|
 | `POST /api/v1/work-orders` | SERVICE | opens a quotation and its invoice (only the workflow prices an order) |
-| `GET /api/v1/work-orders` / `/{id}` | any | list (filters `status`, `patientId`, `createdBefore`) / detail |
+| `GET /api/v1/work-orders` / `/{id}` | any | list (filters `status`, `patientId`, `createdBefore`, `q` — simple, case-insensitive match on the order number; does not search by patient name) / detail |
 | `POST /api/v1/work-orders/{id}/approve` `/advance` `/cancel` | ADMIN, SELLER (cancel also SERVICE) | lifecycle transitions |
 | `GET /api/v1/invoices` / `/{id}` | any | list (filter `status`, `workOrderId`) / detail |
 | `POST /api/v1/invoices/{id}/payments` | ADMIN, SELLER | records an abono (idempotent) |

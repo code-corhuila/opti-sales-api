@@ -24,7 +24,10 @@ public interface WorkOrderUseCases {
     /** Cancels the order and voids its invoice. Repeating it is harmless. */
     WorkOrder cancel(UUID id);
 
-    /** Listing criteria; every field is optional. */
-    record WorkOrderFilter(WorkOrderStatus status, UUID patientId, Instant createdBefore) {
+    /**
+     * Listing criteria; every field is optional. {@code q} is a simple, case-insensitive match on
+     * the order number (HU-21); it does not join against the patient's name.
+     */
+    record WorkOrderFilter(WorkOrderStatus status, UUID patientId, Instant createdBefore, String q) {
     }
 }
