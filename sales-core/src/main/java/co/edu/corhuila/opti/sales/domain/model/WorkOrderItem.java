@@ -4,22 +4,23 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /** One line of a work order, priced by the products domain when the stock was reserved. */
-public record WorkOrderItem(UUID id, UUID frameId, UUID reservationId, String sku, String description, int quantity,
-                            long unitPriceCents, long subtotalCents) {
+public record WorkOrderItem(UUID id, ProductType productType, UUID productId, UUID reservationId, String sku,
+                            String description, int quantity, long unitPriceCents, long subtotalCents) {
 
     private static final Pattern SKU = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{2,59}$");
     static final long MAX_CENTS = 100_000_000_000L;
     private static final int MAX_QUANTITY = 100;
 
     /** Raw input of a line, before validation. */
-    public record Data(UUID frameId, UUID reservationId, String sku, String description, Integer quantity,
-                       Long unitPriceCents) {
+    public record Data(ProductType productType, UUID productId, UUID reservationId, String sku, String description,
+                       Integer quantity, Long unitPriceCents) {
     }
 
     /** Validates a line; {@code prefix} (for example {@code items[0]}) names the field in each error. */
     static WorkOrderItem of(UUID id, Data d, String prefix) {
         Violations v = new Violations();
-        UUID frame = v.check(() -> Validation.required(d.frameId(), prefix + ".frameId"));
+        ProductType productType = v.check(() -> Validation.required(d.productType(), prefix + ".productType"));
+        UUID productId = v.check(() -> Validation.required(d.productId(), prefix + ".productId"));
         UUID reservation = v.check(() -> Validation.required(d.reservationId(), prefix + ".reservationId"));
         String sku = v.check(() -> Validation.matching(d.sku(), prefix + ".sku", SKU, "is not a valid sku"));
         String description = v.check(() -> Validation.text(d.description(), prefix + ".description", 1, 150));
@@ -27,7 +28,7 @@ public record WorkOrderItem(UUID id, UUID frameId, UUID reservationId, String sk
                 Validation.required(d.quantity(), prefix + ".quantity"), prefix + ".quantity", 1, MAX_QUANTITY));
         Long price = v.check(() -> cents(d.unitPriceCents(), prefix + ".unitPriceCents"));
         v.throwIfAny();
-        return new WorkOrderItem(id, frame, reservation, sku, description, quantity, price,
+        return new WorkOrderItem(id, productType, productId, reservation, sku, description, quantity, price,
                 Math.multiplyExact((long) quantity, price));
     }
 
