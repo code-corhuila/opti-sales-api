@@ -2,9 +2,11 @@ package co.edu.corhuila.opti.sales.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -12,8 +14,10 @@ import org.junit.jupiter.api.Test;
 
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.ReportPeriod;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.StatusCount;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases;
 import co.edu.corhuila.opti.sales.domain.model.DomainException;
+import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
 import co.edu.corhuila.opti.sales.testsupport.Fixtures;
 import co.edu.corhuila.opti.sales.testsupport.TestClock;
 
@@ -91,6 +95,48 @@ class ReportServiceTest {
         Instant now = Instant.parse(Fixtures.START);
         assertThatThrownBy(() -> reports.salesSummary(new ReportPeriod(now, now.minusSeconds(60))))
                 .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void salesTimeseriesZeroFillsEveryDayOfTheCurrentMonthUpToToday() {
+        openFor(SELLER_A, "ref-1");
+        clock.advance(Duration.ofDays(1));
+        openFor(SELLER_A, "ref-2");
+
+        var series = reports.salesTimeseries();
+
+        // Fixtures.START is 2026-09-29T15:00:00Z; after advancing one day "today" is Sep 30.
+        assertThat(series).hasSize(30);
+        assertThat(series.get(0).date()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(series.get(0).totalCents()).isZero();
+        assertThat(series.get(28).date()).isEqualTo(LocalDate.of(2026, 9, 29));
+        assertThat(series.get(28).totalCents()).isEqualTo(104_000_000L);
+        assertThat(series.get(29).date()).isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(series.get(29).totalCents()).isEqualTo(104_000_000L);
+    }
+
+    @Test
+    void salesTimeseriesExcludesCancelledOrders() {
+        var created = openFor(SELLER_A, "ref-1");
+        orders.cancel(created);
+
+        var series = reports.salesTimeseries();
+
+        assertThat(series).allSatisfy(day -> assertThat(day.totalCents()).isZero());
+    }
+
+    @Test
+    void ordersByStatusCountsEveryStatusIncludingCancelled() {
+        var cancelled = openFor(SELLER_A, "ref-1");
+        orders.cancel(cancelled);
+        openFor(SELLER_B, "ref-2");
+
+        var counts = reports.ordersByStatus();
+
+        assertThat(counts).hasSize(WorkOrderStatus.values().length);
+        assertThat(counts).extracting(StatusCount::status, StatusCount::count)
+                .contains(tuple(WorkOrderStatus.CANCELLED, 1L), tuple(WorkOrderStatus.QUOTATION, 1L),
+                        tuple(WorkOrderStatus.DELIVERED, 0L));
     }
 
     private UUID openFor(UUID sellerId, String reference) {

@@ -3,6 +3,7 @@ package co.edu.corhuila.opti.sales.adapter.in.http;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,8 +12,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.DailySales;
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.ReportPeriod;
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.SalesSummary;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.StatusCount;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -52,6 +55,22 @@ class ReportsController {
         RequestRules.requireRole(http, Roles.SERVICE);
         RequestRules.onlyParams(http, "sellerId", "from", "to");
         return useCases.mySales(RequestRules.uuid(sellerId, "sellerId"), period(from, to));
+    }
+
+    /** Daily revenue for the current month (UTC calendar), zero-filled from day 1 through today. */
+    @GetMapping("/sales-timeseries")
+    List<DailySales> salesTimeseries(HttpServletRequest http) {
+        RequestRules.requireRole(http, Roles.ADMIN);
+        RequestRules.onlyParams(http);
+        return useCases.salesTimeseries();
+    }
+
+    /** Current count of work orders per {@code WorkOrderStatus}, zero-filled for unused statuses. */
+    @GetMapping("/orders-by-status")
+    List<StatusCount> ordersByStatus(HttpServletRequest http) {
+        RequestRules.requireRole(http, Roles.ADMIN);
+        RequestRules.onlyParams(http);
+        return useCases.ordersByStatus();
     }
 
     private static ReportPeriod period(String from, String to) {
