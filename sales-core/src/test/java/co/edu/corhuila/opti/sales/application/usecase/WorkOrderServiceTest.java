@@ -72,15 +72,15 @@ class WorkOrderServiceTest {
     @Test
     void reportsEveryInvalidFieldIncludingThoseOfEachLine() {
         var bad = new WorkOrder.Data(null, " ", List.of(
-                new WorkOrderItem.Data(null, null, "x", "", 0, -1L),
+                new WorkOrderItem.Data(null, null, null, "x", "", 0, -1L),
                 Fixtures.line("RB5228-2000", 1, 52_000_000L)));
 
         assertThatThrownBy(() -> sales.orders().open(bad, "short"))
                 .isInstanceOfSatisfying(DomainException.class, e -> {
                     assertThat(e.kind()).isEqualTo(ErrorKind.VALIDATION);
                     assertThat(e.fields()).extracting(FieldError::field).containsExactlyInAnyOrder(
-                            "Idempotency-Key", "patientId", "reference", "items[0].frameId",
-                            "items[0].reservationId", "items[0].sku", "items[0].description",
+                            "Idempotency-Key", "patientId", "reference", "items[0].productType",
+                            "items[0].productId", "items[0].reservationId", "items[0].sku", "items[0].description",
                             "items[0].quantity", "items[0].unitPriceCents");
                 });
     }

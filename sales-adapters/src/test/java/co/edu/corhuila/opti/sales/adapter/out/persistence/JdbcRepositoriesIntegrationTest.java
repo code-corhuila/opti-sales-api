@@ -36,6 +36,7 @@ import co.edu.corhuila.opti.sales.domain.model.Invoice;
 import co.edu.corhuila.opti.sales.domain.model.InvoiceStatus;
 import co.edu.corhuila.opti.sales.domain.model.Payment;
 import co.edu.corhuila.opti.sales.domain.model.PaymentMethod;
+import co.edu.corhuila.opti.sales.domain.model.ProductType;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderItem;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
@@ -195,12 +196,15 @@ class JdbcRepositoriesIntegrationTest {
 
     private static WorkOrder.Data order(long price1, int quantity1, long price2, int quantity2) {
         return new WorkOrder.Data(PATIENT, "saga-it", List.of(
-                new WorkOrderItem.Data(UUID.randomUUID(), UUID.randomUUID(), "RB5228-2000", "Frame Ray-Ban", quantity1, price1),
-                new WorkOrderItem.Data(UUID.randomUUID(), UUID.randomUUID(), "VOG-VO5239", "Frame Vogue", quantity2, price2)));
+                new WorkOrderItem.Data(ProductType.FRAME, UUID.randomUUID(), UUID.randomUUID(), "RB5228-2000",
+                        "Frame Ray-Ban", quantity1, price1),
+                new WorkOrderItem.Data(ProductType.FRAME, UUID.randomUUID(), UUID.randomUUID(), "VOG-VO5239",
+                        "Frame Vogue", quantity2, price2)));
     }
 
     private static WorkOrderItem.Data line(long price, int quantity) {
-        return new WorkOrderItem.Data(UUID.randomUUID(), UUID.randomUUID(), "RB5228-2000", "Frame Ray-Ban", quantity, price);
+        return new WorkOrderItem.Data(ProductType.FRAME, UUID.randomUUID(), UUID.randomUUID(), "RB5228-2000",
+                "Frame Ray-Ban", quantity, price);
     }
 
     private static String key() {

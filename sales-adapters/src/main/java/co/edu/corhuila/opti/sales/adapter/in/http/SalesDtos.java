@@ -8,6 +8,7 @@ import co.edu.corhuila.opti.sales.domain.model.Invoice;
 import co.edu.corhuila.opti.sales.domain.model.InvoiceStatus;
 import co.edu.corhuila.opti.sales.domain.model.Payment;
 import co.edu.corhuila.opti.sales.domain.model.PaymentMethod;
+import co.edu.corhuila.opti.sales.domain.model.ProductType;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderItem;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
@@ -21,11 +22,12 @@ final class SalesDtos {
     private SalesDtos() {
     }
 
-    record ItemRequest(UUID frameId, UUID reservationId, String sku, String description, Integer quantity,
-                       Long unitPriceCents) {
+    record ItemRequest(ProductType productType, UUID productId, UUID reservationId, String sku, String description,
+                       Integer quantity, Long unitPriceCents) {
 
         WorkOrderItem.Data toData() {
-            return new WorkOrderItem.Data(frameId, reservationId, sku, description, quantity, unitPriceCents);
+            return new WorkOrderItem.Data(productType, productId, reservationId, sku, description, quantity,
+                    unitPriceCents);
         }
     }
 
@@ -45,12 +47,12 @@ final class SalesDtos {
         }
     }
 
-    record ItemResponse(UUID id, UUID frameId, UUID reservationId, String sku, String description, int quantity,
-                        long unitPriceCents, long subtotalCents) {
+    record ItemResponse(UUID id, ProductType productType, UUID productId, UUID reservationId, String sku,
+                        String description, int quantity, long unitPriceCents, long subtotalCents) {
 
         static ItemResponse from(WorkOrderItem i) {
-            return new ItemResponse(i.id(), i.frameId(), i.reservationId(), i.sku(), i.description(), i.quantity(),
-                    i.unitPriceCents(), i.subtotalCents());
+            return new ItemResponse(i.id(), i.productType(), i.productId(), i.reservationId(), i.sku(),
+                    i.description(), i.quantity(), i.unitPriceCents(), i.subtotalCents());
         }
     }
 
