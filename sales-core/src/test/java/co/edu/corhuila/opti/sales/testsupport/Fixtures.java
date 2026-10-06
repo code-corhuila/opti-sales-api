@@ -10,6 +10,7 @@ import co.edu.corhuila.opti.sales.application.port.out.PaymentGateway;
 import co.edu.corhuila.opti.sales.application.usecase.InvoiceService;
 import co.edu.corhuila.opti.sales.application.usecase.ReportService;
 import co.edu.corhuila.opti.sales.application.usecase.WorkOrderService;
+import co.edu.corhuila.opti.sales.domain.model.ProductType;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderItem;
 
@@ -53,7 +54,7 @@ public final class Fixtures {
     }
 
     public static WorkOrderItem.Data line(String sku, int quantity, long unitPriceCents) {
-        return new WorkOrderItem.Data(UUID.randomUUID(), UUID.randomUUID(), sku, "Frame " + sku, quantity,
-                unitPriceCents);
+        return new WorkOrderItem.Data(ProductType.FRAME, UUID.randomUUID(), UUID.randomUUID(), sku,
+                "Frame " + sku, quantity, unitPriceCents);
     }
 }
