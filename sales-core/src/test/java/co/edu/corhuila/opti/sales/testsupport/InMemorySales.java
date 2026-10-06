@@ -62,6 +62,8 @@ public final class InMemorySales {
                     .filter(o -> filter.status() == null || o.status() == filter.status())
                     .filter(o -> filter.patientId() == null || o.patientId().equals(filter.patientId()))
                     .filter(o -> filter.createdBefore() == null || o.createdAt().isBefore(filter.createdBefore()))
+                    .filter(o -> filter.q() == null
+                            || o.number().toLowerCase().contains(filter.q().toLowerCase()))
                     .sorted(Comparator.comparing(WorkOrder::createdAt).reversed().thenComparing(WorkOrder::id))
                     .toList();
             return page(matches, page);
