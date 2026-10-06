@@ -12,7 +12,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases.InvoiceFilter;
 import co.edu.corhuila.opti.sales.application.port.in.PageQuery;
 import co.edu.corhuila.opti.sales.application.port.in.PageResult;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.DailySales;
 import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.SalesSummary;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases.StatusCount;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases.WorkOrderFilter;
 import co.edu.corhuila.opti.sales.application.port.out.InvoiceRepository;
 import co.edu.corhuila.opti.sales.application.port.out.NumberSequence;
@@ -97,6 +99,39 @@ public final class InMemorySales {
                     .filter(o -> to == null || o.createdAt().isBefore(to))
                     .toList();
             return new SalesSummary(matches.size(), matches.stream().mapToLong(WorkOrder::totalCents).sum());
+        }
+
+        @Override
+        public List<DailySales> dailyTotals(java.time.Instant from, java.time.Instant to) {
+            Map<java.time.LocalDate, Long> byDay = new HashMap<>();
+            for (WorkOrder o : orders.all()) {
+                if (o.status() == WorkOrderStatus.CANCELLED) {
+                    continue;
+                }
+                if (from != null && o.createdAt().isBefore(from)) {
+                    continue;
+                }
+                if (to != null && !o.createdAt().isBefore(to)) {
+                    continue;
+                }
+                java.time.LocalDate day = o.createdAt().atZone(java.time.ZoneOffset.UTC).toLocalDate();
+                byDay.merge(day, o.totalCents(), Long::sum);
+            }
+            return byDay.entrySet().stream()
+                    .map(e -> new DailySales(e.getKey(), e.getValue()))
+                    .sorted(Comparator.comparing(DailySales::date))
+                    .toList();
+        }
+
+        @Override
+        public List<StatusCount> countsByStatus() {
+            Map<WorkOrderStatus, Long> byStatus = new java.util.EnumMap<>(WorkOrderStatus.class);
+            for (WorkOrder o : orders.all()) {
+                byStatus.merge(o.status(), 1L, Long::sum);
+            }
+            return byStatus.entrySet().stream()
+                    .map(e -> new StatusCount(e.getKey(), e.getValue()))
+                    .toList();
         }
     }
 

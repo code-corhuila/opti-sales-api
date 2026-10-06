@@ -149,7 +149,7 @@ class SalesConfiguration {
     }
 
     @Bean
-    ReportUseCases reportUseCases(SalesReportRepository reports) {
-        return new ReportService(reports);
+    ReportUseCases reportUseCases(SalesReportRepository reports, Clock clock) {
+        return new ReportService(reports, clock);
     }
 }

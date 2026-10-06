@@ -41,7 +41,7 @@ public final class Fixtures {
         return new Sales(
                 new WorkOrderService(orders, invoices, new InMemorySales.Numbers(), keys, ids, unit, clock),
                 new InvoiceService(invoices, payments, gateway, keys, ids, unit, clock),
-                new ReportService(new InMemorySales.Reports(orders)));
+                new ReportService(new InMemorySales.Reports(orders), clock));
     }
 
     /** One frame line: 2 units at 52,000,000 cents = 104,000,000 cents. */
