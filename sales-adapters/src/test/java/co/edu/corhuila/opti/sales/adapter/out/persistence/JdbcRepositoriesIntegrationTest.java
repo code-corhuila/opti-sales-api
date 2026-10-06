@@ -122,14 +122,16 @@ class JdbcRepositoriesIntegrationTest {
         WorkOrder first = orders.open(data, key()).value();
         orders.approve(orders.open(data, key()).value().id());
 
-        var quotations = orders.search(new WorkOrderFilter(WorkOrderStatus.QUOTATION, patient, null), PageQuery.first(10));
-        var byDate = orders.search(new WorkOrderFilter(null, patient, Instant.now().plusSeconds(60)), PageQuery.first(10));
-        var none = orders.search(new WorkOrderFilter(null, patient, Instant.now().minusSeconds(3600)), PageQuery.first(10));
+        var quotations = orders.search(new WorkOrderFilter(WorkOrderStatus.QUOTATION, patient, null, null), PageQuery.first(10));
+        var byDate = orders.search(new WorkOrderFilter(null, patient, Instant.now().plusSeconds(60), null), PageQuery.first(10));
+        var none = orders.search(new WorkOrderFilter(null, patient, Instant.now().minusSeconds(3600), null), PageQuery.first(10));
+        var byNumber = orders.search(new WorkOrderFilter(null, patient, null, first.number()), PageQuery.first(10));
 
         assertThat(quotations.data()).extracting(WorkOrder::id).containsExactly(first.id());
         assertThat(byDate.total()).isEqualTo(2);
         assertThat(byDate.data().get(0).createdAt()).isAfterOrEqualTo(byDate.data().get(1).createdAt());
         assertThat(none.total()).isZero();
+        assertThat(byNumber.data()).extracting(WorkOrder::id).containsExactly(first.id());
     }
 
     @Test

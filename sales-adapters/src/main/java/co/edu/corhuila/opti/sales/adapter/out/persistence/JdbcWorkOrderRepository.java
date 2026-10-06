@@ -90,6 +90,10 @@ public class JdbcWorkOrderRepository implements WorkOrderRepository {
             conditions.add("created_at < :before");
             params.put("before", Sql.ts(filter.createdBefore()));
         }
+        if (filter.q() != null && !filter.q().isBlank()) {
+            conditions.add("number ILIKE :q");
+            params.put("q", "%" + filter.q() + "%");
+        }
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
 
         long total = jdbc.sql("SELECT count(*) FROM work_order" + where).params(params).query(Long.class).single();

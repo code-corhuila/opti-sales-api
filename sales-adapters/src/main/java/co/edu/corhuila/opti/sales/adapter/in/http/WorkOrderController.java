@@ -48,11 +48,12 @@ class WorkOrderController {
     @GetMapping
     PageResponse<WorkOrderResponse> search(HttpServletRequest http, @RequestParam(required = false) String status,
             @RequestParam(required = false) String patientId, @RequestParam(required = false) String createdBefore,
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) String page, @RequestParam(required = false) String limit) {
-        RequestRules.onlyParams(http, "status", "patientId", "createdBefore", "page", "limit");
+        RequestRules.onlyParams(http, "status", "patientId", "createdBefore", "q", "page", "limit");
         var filter = new WorkOrderFilter(parseStatus(status),
                 patientId == null || patientId.isBlank() ? null : RequestRules.uuid(patientId, "patientId"),
-                parseInstant(createdBefore));
+                parseInstant(createdBefore), q == null || q.isBlank() ? null : q);
         return PageResponse.of(useCases.search(filter, RequestRules.page(page, limit)).map(WorkOrderResponse::from));
     }
 

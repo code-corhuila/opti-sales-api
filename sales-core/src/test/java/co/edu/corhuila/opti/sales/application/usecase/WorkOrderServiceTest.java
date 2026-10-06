@@ -65,7 +65,7 @@ class WorkOrderServiceTest {
 
         assertThat(replay.created()).isFalse();
         assertThat(replay.value().id()).isEqualTo(first.value().id());
-        assertThat(sales.orders().search(new WorkOrderFilter(null, null, null), PageQuery.first(20)).total()).isEqualTo(1);
+        assertThat(sales.orders().search(new WorkOrderFilter(null, null, null, null), PageQuery.first(20)).total()).isEqualTo(1);
         assertThat(sales.invoices().search(new InvoiceFilter(null, null), PageQuery.first(20)).total()).isEqualTo(1);
     }
 
@@ -177,15 +177,15 @@ class WorkOrderServiceTest {
         var second = sales.orders().open(Fixtures.validOrder(), "open-order-0002").value();
         sales.orders().approve(second.id());
 
-        var all = sales.orders().search(new WorkOrderFilter(null, null, null), PageQuery.first(20));
-        var quotations = sales.orders().search(new WorkOrderFilter(WorkOrderStatus.QUOTATION, null, null), PageQuery.first(20));
+        var all = sales.orders().search(new WorkOrderFilter(null, null, null, null), PageQuery.first(20));
+        var quotations = sales.orders().search(new WorkOrderFilter(WorkOrderStatus.QUOTATION, null, null, null), PageQuery.first(20));
         var old = sales.orders().search(new WorkOrderFilter(WorkOrderStatus.QUOTATION, null,
-                clock.instant().minus(Duration.ofHours(1))), PageQuery.first(20));
+                clock.instant().minus(Duration.ofHours(1)), null), PageQuery.first(20));
 
         assertThat(all.data()).extracting(WorkOrder::id).containsExactly(second.id(), first.id());
         assertThat(quotations.data()).extracting(WorkOrder::id).containsExactly(first.id());
         assertThat(old.data()).extracting(WorkOrder::id).containsExactly(first.id());
-        assertThat(sales.orders().search(new WorkOrderFilter(null, UUID.randomUUID(), null), PageQuery.first(20)).total())
+        assertThat(sales.orders().search(new WorkOrderFilter(null, UUID.randomUUID(), null, null), PageQuery.first(20)).total())
                 .isZero();
     }
 
