@@ -114,6 +114,13 @@ class SalesHttpTest extends ContractChecks {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error").value("INVALID_STATUS_TRANSITION"));
         for (String next : List.of("IN_LABORATORY", "READY", "DELIVERED")) {
+            if (next.equals("DELIVERED")) {
+                as(post(collectionPath() + "/" + id + "/advance"), "SELLER")
+                        .andExpect(status().isUnprocessableEntity())
+                        .andExpect(jsonPath("$.error").value("BUSINESS_RULE_VIOLATION"));
+                as(payment(invoiceOf(id), "{\"amountCents\":1000,\"method\":\"CASH\"}", "pay-" + UUID.randomUUID()), "SELLER")
+                        .andExpect(status().isCreated());
+            }
             as(post(collectionPath() + "/" + id + "/advance"), "SELLER")
                     .andExpect(status().isOk()).andExpect(jsonPath("$.status").value(next));
         }
