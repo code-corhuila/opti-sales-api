@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.UUID;
 
 import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases;
 import co.edu.corhuila.opti.sales.application.usecase.InvoiceService;
+import co.edu.corhuila.opti.sales.application.usecase.ReportService;
 import co.edu.corhuila.opti.sales.application.usecase.WorkOrderService;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrderItem;
@@ -19,8 +21,8 @@ public final class Fixtures {
     private Fixtures() {
     }
 
-    /** Both services share the stores, like in production they share the database. */
-    public record Sales(WorkOrderUseCases orders, InvoiceUseCases invoices) {
+    /** All three services share the stores, like in production they share the database. */
+    public record Sales(WorkOrderUseCases orders, InvoiceUseCases invoices, ReportUseCases reports) {
     }
 
     public static Sales sales(TestClock clock) {
@@ -32,7 +34,8 @@ public final class Fixtures {
         var unit = new DirectUnitOfWork(keys);
         return new Sales(
                 new WorkOrderService(orders, invoices, new InMemorySales.Numbers(), keys, ids, unit, clock),
-                new InvoiceService(invoices, payments, keys, ids, unit, clock));
+                new InvoiceService(invoices, payments, keys, ids, unit, clock),
+                new ReportService(new InMemorySales.Reports(orders)));
     }
 
     /** One frame line: 2 units at 52,000,000 cents = 104,000,000 cents. */
