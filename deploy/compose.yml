@@ -1,0 +1,29 @@
+# The service of the sales domain. Reachable only inside the platform network: no published port.
+name: opti-sales-api
+
+services:
+  sales-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: opti/sales-api:local
+    environment:
+      DATABASE_URL: jdbc:postgresql://sales-db:5432/${SALES_DB_NAME:-sales}
+      DATABASE_USER: ${SALES_DB_USER:-sales_owner}
+      DATABASE_PASSWORD: ${SALES_DB_PASSWORD:?set SALES_DB_PASSWORD in .env}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY (public key of the identity service)}
+      # Optional: a free Wompi sandbox account (https://comercios.wompi.co) routes NEQUI payments
+      # through the real gateway. Unset (the default): every method uses the local simulator.
+      WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-}
+      WOMPI_PRIVATE_KEY: ${WOMPI_PRIVATE_KEY:-}
+      WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET:-}
+      WOMPI_BASE_URL: ${WOMPI_BASE_URL:-https://sandbox.wompi.co/v1}
+    networks:
+      - platform
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+networks:
+  platform:
+    external: true
