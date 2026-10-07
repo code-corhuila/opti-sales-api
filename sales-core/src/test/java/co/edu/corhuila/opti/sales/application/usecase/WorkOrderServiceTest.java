@@ -115,9 +115,28 @@ class WorkOrderServiceTest {
         assertThat(sales.orders().approve(id).status()).isEqualTo(WorkOrderStatus.APPROVED);
         assertThat(sales.orders().advance(id).status()).isEqualTo(WorkOrderStatus.IN_LABORATORY);
         assertThat(sales.orders().advance(id).status()).isEqualTo(WorkOrderStatus.READY);
+        Invoice invoice = invoiceOf(sales.orders().get(id));
+        sales.invoices().pay(invoice.id(), payment(invoice.totalCents()), "pay-delivery-0001");
         assertThat(sales.orders().advance(id).status()).isEqualTo(WorkOrderStatus.DELIVERED);
         assertThatThrownBy(() -> sales.orders().advance(id)).isInstanceOfSatisfying(DomainException.class,
                 e -> assertThat(e.kind()).isEqualTo(ErrorKind.INVALID_STATUS_TRANSITION));
+    }
+
+    @Test
+    void deliveryRejectsUnpaidAndPartialInvoicesWithoutChangingTheOrder() {
+        WorkOrder order = sales.orders().open(Fixtures.validOrder(), KEY).value();
+        sales.orders().approve(order.id());
+        sales.orders().advance(order.id());
+        sales.orders().advance(order.id());
+        assertThatThrownBy(() -> sales.orders().advance(order.id()))
+                .isInstanceOfSatisfying(DomainException.class,
+                        e -> assertThat(e.kind()).isEqualTo(ErrorKind.BUSINESS_RULE_VIOLATION));
+        Invoice invoice = invoiceOf(order);
+        sales.invoices().pay(invoice.id(), payment(1_000_000L), "pay-partial-delivery");
+        assertThatThrownBy(() -> sales.orders().advance(order.id())).isInstanceOf(DomainException.class);
+        assertThat(sales.orders().get(order.id()).status()).isEqualTo(WorkOrderStatus.READY);
+        sales.invoices().pay(invoice.id(), payment(invoice.totalCents() - 1_000_000L), "pay-final-delivery");
+        assertThat(sales.orders().advance(order.id()).status()).isEqualTo(WorkOrderStatus.DELIVERED);
     }
 
     @Test

@@ -15,6 +15,8 @@ import co.edu.corhuila.opti.sales.application.port.out.UnitOfWork;
 import co.edu.corhuila.opti.sales.application.port.out.WorkOrderRepository;
 import co.edu.corhuila.opti.sales.domain.model.DomainException;
 import co.edu.corhuila.opti.sales.domain.model.Invoice;
+import co.edu.corhuila.opti.sales.domain.model.InvoiceStatus;
+import co.edu.corhuila.opti.sales.domain.model.WorkOrderStatus;
 import co.edu.corhuila.opti.sales.domain.model.Validation;
 import co.edu.corhuila.opti.sales.domain.model.Violations;
 import co.edu.corhuila.opti.sales.domain.model.WorkOrder;
@@ -86,7 +88,15 @@ public class WorkOrderService implements WorkOrderUseCases {
     @Override
     public WorkOrder advance(UUID id) {
         return unitOfWork.run(() -> {
-            WorkOrder advanced = locked(id).advance(clock.instant());
+            WorkOrder order = locked(id);
+            if (order.status() == WorkOrderStatus.READY) {
+                Invoice invoice = invoices.findByWorkOrderIdForUpdate(id)
+                        .orElseThrow(() -> DomainException.rule("the order has no invoice"));
+                if (invoice.status() != InvoiceStatus.PAID || invoice.balanceCents() != 0) {
+                    throw DomainException.rule("the order cannot be delivered until its invoice is fully paid");
+                }
+            }
+            WorkOrder advanced = order.advance(clock.instant());
             orders.update(advanced);
             return advanced;
         });
