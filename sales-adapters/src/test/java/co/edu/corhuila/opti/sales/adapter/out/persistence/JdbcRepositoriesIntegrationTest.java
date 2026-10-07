@@ -28,6 +28,7 @@ import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases.InvoiceFil
 import co.edu.corhuila.opti.sales.application.port.in.PageQuery;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases.WorkOrderFilter;
+import co.edu.corhuila.opti.sales.adapter.out.gateway.SandboxPaymentGateway;
 import co.edu.corhuila.opti.sales.application.usecase.InvoiceService;
 import co.edu.corhuila.opti.sales.application.usecase.WorkOrderService;
 import co.edu.corhuila.opti.sales.domain.model.DomainException;
@@ -64,8 +65,8 @@ class JdbcRepositoriesIntegrationTest {
         var invoiceRepository = new JdbcInvoiceRepository(jdbc);
         orders = new WorkOrderService(new JdbcWorkOrderRepository(jdbc), invoiceRepository,
                 new JdbcNumberSequence(jdbc), keys, ids, unit, Clock.systemUTC());
-        invoices = new InvoiceService(invoiceRepository, new JdbcPaymentRepository(jdbc), keys, ids, unit,
-                Clock.systemUTC());
+        invoices = new InvoiceService(invoiceRepository, new JdbcPaymentRepository(jdbc), new SandboxPaymentGateway(),
+                keys, ids, unit, Clock.systemUTC());
     }
 
     @Test

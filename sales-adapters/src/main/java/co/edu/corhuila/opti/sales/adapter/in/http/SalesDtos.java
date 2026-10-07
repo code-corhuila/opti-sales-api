@@ -76,11 +76,11 @@ final class SalesDtos {
     }
 
     record PaymentResponse(UUID id, UUID invoiceId, long amountCents, PaymentMethod method, String reference,
-                           Instant paidAt) {
+                           String gatewayTransactionId, Instant paidAt) {
 
         static PaymentResponse from(Payment p) {
             return new PaymentResponse(p.id(), p.invoiceId(), p.amountCents(), p.method(), p.reference(),
-                    p.paidAt());
+                    p.gatewayTransactionId(), p.paidAt());
         }
     }
 }

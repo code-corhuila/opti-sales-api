@@ -17,7 +17,8 @@ import co.edu.corhuila.opti.sales.domain.model.PaymentMethod;
 /** PostgreSQL implementation of {@link PaymentRepository}. */
 public class JdbcPaymentRepository implements PaymentRepository {
 
-    private static final String COLUMNS = "id, invoice_id, amount_cents, method, reference, paid_at";
+    private static final String COLUMNS =
+            "id, invoice_id, amount_cents, method, reference, gateway_transaction_id, paid_at";
 
     private final JdbcClient jdbc;
 
@@ -27,10 +28,11 @@ public class JdbcPaymentRepository implements PaymentRepository {
 
     @Override
     public void insert(Payment p) {
-        jdbc.sql("INSERT INTO payment (" + COLUMNS + ") VALUES (:id, :invoice, :amount, :method, :reference, :paidAt)")
+        jdbc.sql("INSERT INTO payment (" + COLUMNS + ") VALUES (:id, :invoice, :amount, :method, :reference,"
+                        + " :transactionId, :paidAt)")
                 .param("id", p.id()).param("invoice", p.invoiceId()).param("amount", p.amountCents())
                 .param("method", p.method().name()).param("reference", p.reference())
-                .param("paidAt", Sql.ts(p.paidAt()))
+                .param("transactionId", p.gatewayTransactionId()).param("paidAt", Sql.ts(p.paidAt()))
                 .update();
     }
 
@@ -54,6 +56,6 @@ public class JdbcPaymentRepository implements PaymentRepository {
     private static Payment map(ResultSet rs, int row) throws SQLException {
         return new Payment(rs.getObject("id", UUID.class), rs.getObject("invoice_id", UUID.class),
                 rs.getLong("amount_cents"), PaymentMethod.valueOf(rs.getString("method")),
-                rs.getString("reference"), Sql.instant(rs, "paid_at"));
+                rs.getString("reference"), rs.getString("gateway_transaction_id"), Sql.instant(rs, "paid_at"));
     }
 }

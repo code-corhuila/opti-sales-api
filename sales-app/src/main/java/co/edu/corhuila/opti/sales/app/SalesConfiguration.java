@@ -18,6 +18,7 @@ import co.edu.corhuila.opti.sales.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.IdempotencyKeys;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcInvoiceRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcNumberSequence;
+import co.edu.corhuila.opti.sales.adapter.out.gateway.SandboxPaymentGateway;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcPaymentRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcSalesReportRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcUnitOfWork;
@@ -30,6 +31,7 @@ import co.edu.corhuila.opti.sales.application.port.out.IdGenerator;
 import co.edu.corhuila.opti.sales.application.port.out.IdempotencyStore;
 import co.edu.corhuila.opti.sales.application.port.out.InvoiceRepository;
 import co.edu.corhuila.opti.sales.application.port.out.NumberSequence;
+import co.edu.corhuila.opti.sales.application.port.out.PaymentGateway;
 import co.edu.corhuila.opti.sales.application.port.out.PaymentRepository;
 import co.edu.corhuila.opti.sales.application.port.out.SalesReportRepository;
 import co.edu.corhuila.opti.sales.application.port.out.UnitOfWork;
@@ -104,6 +106,11 @@ class SalesConfiguration {
     }
 
     @Bean
+    PaymentGateway paymentGateway() {
+        return new SandboxPaymentGateway();
+    }
+
+    @Bean
     WorkOrderUseCases workOrderUseCases(WorkOrderRepository orders, InvoiceRepository invoices,
                                         NumberSequence numbers, IdempotencyStore keys, IdGenerator ids,
                                         UnitOfWork unitOfWork, Clock clock) {
@@ -111,9 +118,9 @@ class SalesConfiguration {
     }
 
     @Bean
-    InvoiceUseCases invoiceUseCases(InvoiceRepository invoices, PaymentRepository payments, IdempotencyStore keys,
-                                    IdGenerator ids, UnitOfWork unitOfWork, Clock clock) {
-        return new InvoiceService(invoices, payments, keys, ids, unitOfWork, clock);
+    InvoiceUseCases invoiceUseCases(InvoiceRepository invoices, PaymentRepository payments, PaymentGateway gateway,
+                                    IdempotencyStore keys, IdGenerator ids, UnitOfWork unitOfWork, Clock clock) {
+        return new InvoiceService(invoices, payments, gateway, keys, ids, unitOfWork, clock);
     }
 
     @Bean
