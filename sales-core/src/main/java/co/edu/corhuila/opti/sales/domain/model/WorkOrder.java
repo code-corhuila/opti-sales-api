@@ -22,11 +22,13 @@ public final class WorkOrder {
     private final WorkOrderStatus status;
     private final List<WorkOrderItem> items;
     private final long totalCents;
+    private final UUID sellerId;
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private WorkOrder(UUID id, String number, UUID patientId, String reference, WorkOrderStatus status,
-                      List<WorkOrderItem> items, long totalCents, Instant createdAt, Instant updatedAt) {
+                      List<WorkOrderItem> items, long totalCents, UUID sellerId, Instant createdAt,
+                      Instant updatedAt) {
         this.id = id;
         this.number = number;
         this.patientId = patientId;
@@ -34,12 +36,14 @@ public final class WorkOrder {
         this.status = status;
         this.items = List.copyOf(items);
         this.totalCents = totalCents;
+        this.sellerId = sellerId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
     /** Input that passed every rule, ready to become an order. */
-    public record Checked(UUID patientId, String reference, List<WorkOrderItem> items, long totalCents) {
+    public record Checked(UUID patientId, String reference, List<WorkOrderItem> items, long totalCents,
+                          UUID sellerId) {
     }
 
     /** Validates the raw input. Every broken rule is reported, including the ones of each line. */
@@ -53,19 +57,20 @@ public final class WorkOrder {
         if (total > MAX_TOTAL_CENTS) {
             throw DomainException.validation("items", "the total exceeds " + MAX_TOTAL_CENTS + " cents");
         }
-        return new Checked(patient, reference, items, total);
+        return new Checked(patient, reference, items, total, data.sellerId());
     }
 
     /** Opens a quotation from validated input. The number is requested only now, so rejected input burns none. */
     public static WorkOrder open(UUID id, Supplier<String> number, Checked input, Instant now) {
         return new WorkOrder(id, number.get(), input.patientId(), input.reference(), WorkOrderStatus.QUOTATION,
-                input.items(), input.totalCents(), now, now);
+                input.items(), input.totalCents(), input.sellerId(), now, now);
     }
 
     public static WorkOrder rehydrate(UUID id, String number, UUID patientId, String reference,
                                       WorkOrderStatus status, List<WorkOrderItem> items, long totalCents,
-                                      Instant createdAt, Instant updatedAt) {
-        return new WorkOrder(id, number, patientId, reference, status, items, totalCents, createdAt, updatedAt);
+                                      UUID sellerId, Instant createdAt, Instant updatedAt) {
+        return new WorkOrder(id, number, patientId, reference, status, items, totalCents, sellerId, createdAt,
+                updatedAt);
     }
 
     /** A quotation is approved once; approving again is an invalid transition. */
@@ -99,7 +104,7 @@ public final class WorkOrder {
     }
 
     private WorkOrder withStatus(WorkOrderStatus next, Instant now) {
-        return new WorkOrder(id, number, patientId, reference, next, items, totalCents, createdAt, now);
+        return new WorkOrder(id, number, patientId, reference, next, items, totalCents, sellerId, createdAt, now);
     }
 
     private static List<WorkOrderItem> lines(List<WorkOrderItem.Data> data, Supplier<UUID> itemIds) {
@@ -148,6 +153,10 @@ public final class WorkOrder {
         return totalCents;
     }
 
+    public UUID sellerId() {
+        return sellerId;
+    }
+
     public Instant createdAt() {
         return createdAt;
     }
@@ -156,7 +165,15 @@ public final class WorkOrder {
         return updatedAt;
     }
 
-    /** Raw input to open a work order, before validation. */
-    public record Data(UUID patientId, String reference, List<WorkOrderItem.Data> items) {
+    /**
+     * Raw input to open a work order, before validation. {@code sellerId} is optional (and absent
+     * when a caller does not carry one, such as a historical or service-originated order), so the
+     * 3-argument constructor keeps every existing caller compiling unchanged.
+     */
+    public record Data(UUID patientId, String reference, List<WorkOrderItem.Data> items, UUID sellerId) {
+
+        public Data(UUID patientId, String reference, List<WorkOrderItem.Data> items) {
+            this(patientId, reference, items, null);
+        }
     }
 }

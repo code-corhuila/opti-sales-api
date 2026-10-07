@@ -29,12 +29,12 @@ final class SalesDtos {
         }
     }
 
-    record OpenWorkOrderRequest(UUID patientId, String reference, List<ItemRequest> items) {
+    record OpenWorkOrderRequest(UUID patientId, String reference, List<ItemRequest> items, UUID sellerId) {
 
         WorkOrder.Data toData() {
             List<WorkOrderItem.Data> lines = items == null ? null
                     : items.stream().map(i -> i == null ? null : i.toData()).toList();
-            return new WorkOrder.Data(patientId, reference, lines);
+            return new WorkOrder.Data(patientId, reference, lines, sellerId);
         }
     }
 
@@ -55,12 +55,13 @@ final class SalesDtos {
     }
 
     record WorkOrderResponse(UUID id, String number, UUID patientId, String reference, WorkOrderStatus status,
-                             List<ItemResponse> items, long totalCents, Instant createdAt, Instant updatedAt) {
+                             List<ItemResponse> items, long totalCents, UUID sellerId, Instant createdAt,
+                             Instant updatedAt) {
 
         static WorkOrderResponse from(WorkOrder o) {
             return new WorkOrderResponse(o.id(), o.number(), o.patientId(), o.reference(), o.status(),
-                    o.items().stream().map(ItemResponse::from).toList(), o.totalCents(), o.createdAt(),
-                    o.updatedAt());
+                    o.items().stream().map(ItemResponse::from).toList(), o.totalCents(), o.sellerId(),
+                    o.createdAt(), o.updatedAt());
         }
     }
 
