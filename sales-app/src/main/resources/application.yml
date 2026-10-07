@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: sales-api
+  lifecycle:
+    timeout-per-shutdown-phase: 20s          # graceful shutdown: in-flight requests get 20 s
+  web:
+    resources:
+      add-mappings: false                    # unknown routes end in the common 404 envelope
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true       # a typo in a field is an error, not silently ignored
+      accept-float-as-int: false             # 12.5 is not a valid integer (money is always cents)
+    serialization:
+      write-dates-as-timestamps: false       # RFC 3339
+  datasource:
+    url: ${DATABASE_URL:}
+    username: ${DATABASE_USER:}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10                  # pool size
+      minimum-idle: 2
+      connection-timeout: 5000               # max wait for a connection: 5 s
+      # max time per statement: 5 s; the schema belongs to sales-db
+      connection-init-sql: "SET statement_timeout = 5000; SET search_path = sales"
+
+server:
+  port: 8080
+  shutdown: graceful
+  max-http-request-header-size: 16KB
+  tomcat:
+    connection-timeout: 5s                   # header/read timeout
+    keep-alive-timeout: 60s                  # idle connections are closed after 60 s
+    max-keep-alive-requests: 100
+    threads:
+      max: 100
+    max-swallow-size: 1MB
+
+jwt:
+  public-key: ${JWT_PUBLIC_KEY:}
+  public-key-file: ${JWT_PUBLIC_KEY_FILE:}
+
+management:
+  endpoints:
+    enabled-by-default: false
