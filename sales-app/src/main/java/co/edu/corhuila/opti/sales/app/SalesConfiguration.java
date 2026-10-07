@@ -19,19 +19,23 @@ import co.edu.corhuila.opti.sales.adapter.out.persistence.IdempotencyKeys;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcInvoiceRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcNumberSequence;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcPaymentRepository;
+import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcSalesReportRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcUnitOfWork;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcWorkOrderRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.UuidGenerator;
 import co.edu.corhuila.opti.sales.application.port.in.InvoiceUseCases;
+import co.edu.corhuila.opti.sales.application.port.in.ReportUseCases;
 import co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases;
 import co.edu.corhuila.opti.sales.application.port.out.IdGenerator;
 import co.edu.corhuila.opti.sales.application.port.out.IdempotencyStore;
 import co.edu.corhuila.opti.sales.application.port.out.InvoiceRepository;
 import co.edu.corhuila.opti.sales.application.port.out.NumberSequence;
 import co.edu.corhuila.opti.sales.application.port.out.PaymentRepository;
+import co.edu.corhuila.opti.sales.application.port.out.SalesReportRepository;
 import co.edu.corhuila.opti.sales.application.port.out.UnitOfWork;
 import co.edu.corhuila.opti.sales.application.port.out.WorkOrderRepository;
 import co.edu.corhuila.opti.sales.application.usecase.InvoiceService;
+import co.edu.corhuila.opti.sales.application.usecase.ReportService;
 import co.edu.corhuila.opti.sales.application.usecase.WorkOrderService;
 
 /**
@@ -110,5 +114,15 @@ class SalesConfiguration {
     InvoiceUseCases invoiceUseCases(InvoiceRepository invoices, PaymentRepository payments, IdempotencyStore keys,
                                     IdGenerator ids, UnitOfWork unitOfWork, Clock clock) {
         return new InvoiceService(invoices, payments, keys, ids, unitOfWork, clock);
+    }
+
+    @Bean
+    SalesReportRepository salesReportRepository(JdbcClient jdbc) {
+        return new JdbcSalesReportRepository(jdbc);
+    }
+
+    @Bean
+    ReportUseCases reportUseCases(SalesReportRepository reports) {
+        return new ReportService(reports);
     }
 }
