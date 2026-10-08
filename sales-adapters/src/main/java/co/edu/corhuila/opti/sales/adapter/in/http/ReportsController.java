@@ -45,6 +45,15 @@ class ReportsController {
         return useCases.mySales(UUID.fromString(caller.subject()), period(from, to));
     }
 
+    /** SERVICE only (the worker checks sales goals): the one caller trusted with an explicit sellerId. */
+    @GetMapping("/seller-sales")
+    SalesSummary sellerSales(HttpServletRequest http, @RequestParam String sellerId,
+            @RequestParam(required = false) String from, @RequestParam(required = false) String to) {
+        RequestRules.requireRole(http, Roles.SERVICE);
+        RequestRules.onlyParams(http, "sellerId", "from", "to");
+        return useCases.mySales(RequestRules.uuid(sellerId, "sellerId"), period(from, to));
+    }
+
     private static ReportPeriod period(String from, String to) {
         return new ReportPeriod(parseInstant(from, "from"), parseInstant(to, "to"));
     }
