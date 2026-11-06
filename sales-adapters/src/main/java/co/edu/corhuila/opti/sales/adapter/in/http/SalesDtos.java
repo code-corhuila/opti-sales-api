@@ -40,7 +40,7 @@ final class SalesDtos {
         }
     }
 
-    record PaymentRequest(Long amountCents, PaymentMethod method, String reference) {
+    record PaymentRequest(Long amountCents, PaymentMethod method, String reference, UUID challengeId, String otp, PaymentGuard.Receipt receipt) {
 
         Payment.Data toData() {
             return new Payment.Data(amountCents, method, reference);
@@ -78,11 +78,11 @@ final class SalesDtos {
     }
 
     record PaymentResponse(UUID id, UUID invoiceId, long amountCents, PaymentMethod method, String reference,
-                           String gatewayTransactionId, Instant paidAt) {
+                           String gatewayTransactionId, Instant paidAt, boolean hasReceipt) {
 
-        static PaymentResponse from(Payment p) {
+        static PaymentResponse from(Payment p, boolean hasReceipt) {
             return new PaymentResponse(p.id(), p.invoiceId(), p.amountCents(), p.method(), p.reference(),
-                    p.gatewayTransactionId(), p.paidAt());
+                    p.gatewayTransactionId(), p.paidAt(), hasReceipt);
         }
     }
 }
