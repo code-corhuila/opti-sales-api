@@ -29,9 +29,13 @@ class InvoiceController {
     private static final String INVOICES = "/api/v1/invoices";
 
     private final InvoiceUseCases useCases;
+    private final PaymentGuard guard;
+    private final co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases orders;
 
-    InvoiceController(InvoiceUseCases useCases) {
+    InvoiceController(InvoiceUseCases useCases, co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases orders, PaymentGuard guard) {
         this.useCases = useCases;
+        this.orders = orders;
+        this.guard = guard;
     }
 
     @GetMapping
@@ -49,14 +53,68 @@ class InvoiceController {
         return InvoiceResponse.from(useCases.get(RequestRules.uuid(id, "id")));
     }
 
+    @GetMapping("/{id}/pdf")
+    ResponseEntity<byte[]> pdf(HttpServletRequest http, @PathVariable String id) {
+        RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        var invoice = useCases.get(RequestRules.uuid(id, "id"));
+        var order = orders.get(invoice.workOrderId());
+        var lines = new java.util.ArrayList<String>();
+        lines.add("OptiView - Factura " + invoice.number());
+        lines.add("Documento interno. No es una factura fiscal certificada.");
+        lines.add("Fecha: " + invoice.createdAt());
+        lines.add("Orden: " + order.number());
+        lines.add("Paciente (identificador): " + invoice.patientId());
+        lines.add("Estado: " + invoice.status());
+        for (var item : order.items()) {
+            lines.add(item.sku() + " - " + item.description());
+            lines.add("Cantidad: " + item.quantity() + " | Unitario COP: " + money(item.unitPriceCents())
+                + " | Subtotal COP: " + money(item.subtotalCents()));
+        }
+        lines.add("Total COP: " + money(invoice.totalCents()));
+        lines.add("Abonado COP: " + money(invoice.paidCents()));
+        lines.add("Saldo COP: " + money(invoice.balanceCents()));
+        return PdfDocument.download("factura-" + invoice.id() + ".pdf", lines);
+    }
+
+    private static String money(long cents) {
+        return java.math.BigDecimal.valueOf(cents, 2).toPlainString();
+    }
+
     @PostMapping("/{id}/payments")
     ResponseEntity<Responses.CreatedBody> pay(HttpServletRequest http, @PathVariable String id,
             @RequestHeader(value = "Idempotency-Key", required = false) String key,
             @RequestBody PaymentRequest body) {
         RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
         UUID invoiceId = RequestRules.uuid(id, "id");
-        var result = useCases.pay(invoiceId, body.toData(), key);
+        var result = guard.pay(RequestRules.caller(http).subject(), invoiceId, body.toData(), key,
+            body.challengeId(), body.otp(), body.receipt(), () -> useCases.pay(invoiceId, body.toData(), key));
         return Responses.created(result, result.value().id(), INVOICES + "/" + invoiceId + "/payments");
+    }
+
+    record ChallengeRequest(Long amountCents, co.edu.corhuila.opti.sales.domain.model.PaymentMethod method, String reference) { }
+
+    @PostMapping("/{id}/payment-challenges")
+    ResponseEntity<PaymentGuard.Challenge> challenge(HttpServletRequest http, @PathVariable String id, @RequestBody ChallengeRequest body) {
+        var user = RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        UUID invoiceId = RequestRules.uuid(id, "id");
+        var invoice = useCases.get(invoiceId);
+        var data = new co.edu.corhuila.opti.sales.domain.model.Payment.Data(body.amountCents(), body.method(), body.reference());
+        co.edu.corhuila.opti.sales.domain.model.Payment.check(data);
+        if (invoice.status() == InvoiceStatus.VOID || body.amountCents() > invoice.balanceCents())
+            throw ApiException.validation("amountPesos", "El monto supera el saldo o la factura está anulada.");
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(guard.start(user.subject(), invoiceId, data));
+    }
+
+    @GetMapping("/{id}/payments/{paymentId}/receipt")
+    ResponseEntity<byte[]> receipt(HttpServletRequest http, @PathVariable String id, @PathVariable String paymentId) {
+        RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        var invoiceId = RequestRules.uuid(id, "id");
+        useCases.get(invoiceId);
+        var document = guard.receipt(RequestRules.uuid(paymentId, "paymentId"), invoiceId);
+        String extension = document.contentType().equals("application/pdf") ? "pdf" : document.contentType().equals("image/png") ? "png" : "jpg";
+        return ResponseEntity.ok().header("Content-Type", document.contentType())
+            .header("Content-Disposition", "attachment; filename=\"comprobante-" + paymentId + "." + extension + "\"")
+            .header("Cache-Control", "no-store").header("X-Content-Type-Options", "nosniff").body(document.bytes());
     }
 
     @GetMapping("/{id}/payments")
@@ -64,7 +122,7 @@ class InvoiceController {
             @RequestParam(required = false) String page, @RequestParam(required = false) String limit) {
         RequestRules.onlyParams(http, "page", "limit");
         return PageResponse.of(useCases.payments(RequestRules.uuid(id, "id"), RequestRules.page(page, limit))
-                .map(PaymentResponse::from));
+                .map(p -> PaymentResponse.from(p, guard.hasReceipt(p.id(), p.invoiceId()))));
     }
 
     private static InvoiceStatus parseStatus(String value) {
