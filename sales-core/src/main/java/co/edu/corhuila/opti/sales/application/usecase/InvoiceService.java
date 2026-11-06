@@ -63,7 +63,11 @@ public class InvoiceService implements InvoiceUseCases {
         return unitOfWork.run(() -> {
             if (!keys.claim(key, PAYMENT, paymentId)) {
                 UUID existing = keys.find(key, PAYMENT).orElseThrow();
-                return new Created<>(payments.findById(existing).orElseThrow(), false);
+                Payment previous = payments.findById(existing).orElseThrow();
+                if (!previous.invoiceId().equals(invoiceId) || previous.amountCents() != checked.amountCents()
+                    || previous.method() != checked.method() || !java.util.Objects.equals(previous.reference(), checked.reference()))
+                    throw DomainException.validation("Idempotency-Key", "La clave ya corresponde a otro pago.");
+                return new Created<>(previous, false);
             }
             // A decline throws, rolling back this claim with it: the same key can be retried.
             String transactionId = authorizeIfElectronic(checked);

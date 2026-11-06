@@ -1,11 +1,9 @@
 package co.edu.corhuila.opti.sales.app;
 
 import java.io.IOException;
-import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Duration;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -17,9 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import co.edu.corhuila.opti.sales.adapter.in.http.PublicPaths;
 import co.edu.corhuila.opti.sales.adapter.in.http.Rs256Verifier;
-import co.edu.corhuila.opti.sales.adapter.out.gateway.CompositePaymentGateway;
 import co.edu.corhuila.opti.sales.adapter.out.gateway.SandboxPaymentGateway;
-import co.edu.corhuila.opti.sales.adapter.out.gateway.WompiPaymentGateway;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.IdempotencyKeys;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcInvoiceRepository;
 import co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcNumberSequence;
@@ -109,25 +105,14 @@ class SalesConfiguration {
         return new JdbcPaymentRepository(jdbc);
     }
 
-    /**
-     * NEQUI goes through the real Wompi sandbox when its keys are configured (free account at
-     * https://comercios.wompi.co, no subscription); otherwise every method, NEQUI included, falls
-     * back to the local simulator, so the service keeps working out of the box.
-     */
+    /** Educational flow: no provider configuration is consulted and no network calls are made. */
     @Bean
-    PaymentGateway paymentGateway(ObjectMapper json,
-                                  @Value("${wompi.public-key:}") String wompiPublicKey,
-                                  @Value("${wompi.private-key:}") String wompiPrivateKey,
-                                  @Value("${wompi.integrity-secret:}") String wompiIntegritySecret,
-                                  @Value("${wompi.base-url:https://sandbox.wompi.co/v1}") String wompiBaseUrl) {
-        SandboxPaymentGateway sandbox = new SandboxPaymentGateway();
-        if (wompiPublicKey.isBlank() || wompiPrivateKey.isBlank() || wompiIntegritySecret.isBlank()) {
-            return sandbox;
-        }
-        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-        WompiPaymentGateway wompi = new WompiPaymentGateway(http, json, wompiBaseUrl, wompiPublicKey,
-                wompiPrivateKey, wompiIntegritySecret);
-        return new CompositePaymentGateway(wompi, sandbox);
+    PaymentGateway paymentGateway() { return new SandboxPaymentGateway(); }
+
+    @Bean
+    co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard paymentGuard(Clock clock, JdbcClient jdbc, TransactionTemplate tx) {
+        return new co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard(clock,
+            new co.edu.corhuila.opti.sales.adapter.out.persistence.JdbcPaymentDocuments(jdbc, tx));
     }
 
     @Bean
