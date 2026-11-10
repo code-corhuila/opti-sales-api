@@ -39,6 +39,10 @@ final class TestTokens {
         return rs256(IDENTITY.getPrivate(), now, "user-1", roles);
     }
 
+    static String validAs(Instant now, String subject, String... roles) {
+        return rs256(IDENTITY.getPrivate(), now, subject, roles);
+    }
+
     static String expired(Instant now) {
         return sign("RS256", claims("user-1", now.minusSeconds(7200), now.minusSeconds(3600)), IDENTITY.getPrivate());
     }

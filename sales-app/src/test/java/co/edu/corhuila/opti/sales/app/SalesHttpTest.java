@@ -225,9 +225,13 @@ class SalesHttpTest extends ContractChecks {
 
     @Test
     void invoicePdfAndEvidenceDownloadsEnforceRolesAndInvoiceScope() throws Exception {
-        String invoice = invoiceOf(open(orderJson("pdf-test", 10000L, 1)));
+        var seller = UUID.randomUUID();
+        var stranger = UUID.randomUUID();
+        String body = orderJson("pdf-test", 10000L, 1).replaceFirst("\\{", "{\"sellerId\":\"" + seller + "\",");
+        String invoice = invoiceOf(open(body));
         String base = "/api/v1/invoices/" + invoice;
-        var pdf = as(get(base + "/pdf"), "SELLER").andExpect(status().isOk())
+        var pdf = mvc.perform(get(base + "/pdf").header("Authorization",
+            "Bearer " + TestTokens.validAs(clock.instant(), seller.toString(), "SELLER"))).andExpect(status().isOk())
             .andExpect(header().string("Content-Type", "application/pdf"))
             .andExpect(header().string("Cache-Control", "no-store")).andReturn().getResponse().getContentAsByteArray();
         org.assertj.core.api.Assertions.assertThat(new String(pdf, java.nio.charset.Charset.forName("windows-1252")))
@@ -239,10 +243,15 @@ class SalesHttpTest extends ContractChecks {
             .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
         String url = base + "/payments/" + payment + "/receipt";
         as(get(url), "ADMIN").andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
+        String ownerToken = "Bearer " + TestTokens.validAs(clock.instant(), seller.toString(), "SELLER");
+        String strangerToken = "Bearer " + TestTokens.validAs(clock.instant(), stranger.toString(), "SELLER");
+        mvc.perform(get(url).header("Authorization", ownerToken)).andExpect(status().isOk());
+        mvc.perform(get(url).header("Authorization", strangerToken)).andExpect(status().isForbidden());
+        mvc.perform(get(base + "/pdf").header("Authorization", strangerToken)).andExpect(status().isForbidden());
         as(get(url), "OPTOMETRIST").andExpect(status().isForbidden());
         mvc.perform(get(url)).andExpect(status().isUnauthorized());
         String other = invoiceOf(open(orderJson("other-proof", 10000L, 1)));
-        as(get("/api/v1/invoices/" + other + "/payments/" + payment + "/receipt"), "SELLER").andExpect(status().isNotFound());
+        as(get("/api/v1/invoices/" + other + "/payments/" + payment + "/receipt"), "ADMIN").andExpect(status().isNotFound());
     }
 
     @Test

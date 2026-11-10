@@ -89,6 +89,9 @@ public class InvoiceService implements InvoiceUseCases {
         if (!result.approved()) {
             throw DomainException.rule("the payment gateway declined the charge: " + result.declineReason());
         }
+        if (result.transactionId() == null || result.transactionId().isBlank()) {
+            throw DomainException.rule("La pasarela no devolvió un identificador de transacción.");
+        }
         return result.transactionId();
     }
 
