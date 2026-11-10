@@ -58,6 +58,7 @@ class InvoiceController {
         RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
         var invoice = useCases.get(RequestRules.uuid(id, "id"));
         var order = orders.get(invoice.workOrderId());
+        requireInvoiceOwner(http, order);
         var lines = new java.util.ArrayList<String>();
         lines.add("OptiView - Factura " + invoice.number());
         lines.add("Documento interno. No es una factura fiscal certificada.");
@@ -109,7 +110,7 @@ class InvoiceController {
     ResponseEntity<byte[]> receipt(HttpServletRequest http, @PathVariable String id, @PathVariable String paymentId) {
         RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
         var invoiceId = RequestRules.uuid(id, "id");
-        useCases.get(invoiceId);
+        requireInvoiceOwner(http, orders.get(useCases.get(invoiceId).workOrderId()));
         var document = guard.receipt(RequestRules.uuid(paymentId, "paymentId"), invoiceId);
         String extension = document.contentType().equals("application/pdf") ? "pdf" : document.contentType().equals("image/png") ? "png" : "jpg";
         return ResponseEntity.ok().header("Content-Type", document.contentType())
@@ -123,6 +124,15 @@ class InvoiceController {
         RequestRules.onlyParams(http, "page", "limit");
         return PageResponse.of(useCases.payments(RequestRules.uuid(id, "id"), RequestRules.page(page, limit))
                 .map(p -> PaymentResponse.from(p, guard.hasReceipt(p.id(), p.invoiceId()))));
+    }
+
+    private static void requireInvoiceOwner(HttpServletRequest http,
+            co.edu.corhuila.opti.sales.domain.model.WorkOrder order) {
+        var user = RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        if (!user.hasAnyRole(Roles.ADMIN)
+                && (order.sellerId() == null || !order.sellerId().toString().equals(user.subject()))) {
+            throw ApiException.forbidden();
+        }
     }
 
     private static InvoiceStatus parseStatus(String value) {
