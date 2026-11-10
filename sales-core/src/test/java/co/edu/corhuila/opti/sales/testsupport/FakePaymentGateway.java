@@ -11,6 +11,7 @@ import co.edu.corhuila.opti.sales.domain.model.PaymentMethod;
 public final class FakePaymentGateway implements PaymentGateway {
 
     public boolean approve = true;
+    public boolean includeTransactionId = true;
     public String declineReason = "insufficient funds";
     public final List<PaymentMethod> authorized = new ArrayList<>();
 
@@ -20,6 +21,6 @@ public final class FakePaymentGateway implements PaymentGateway {
         if (!approve) {
             return new GatewayResult(false, null, declineReason);
         }
-        return new GatewayResult(true, "TEST-" + UUID.randomUUID(), null);
+        return new GatewayResult(true, includeTransactionId ? "TEST-" + UUID.randomUUID() : null, null);
     }
 }
