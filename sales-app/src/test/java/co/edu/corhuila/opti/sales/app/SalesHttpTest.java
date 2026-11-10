@@ -235,7 +235,7 @@ class SalesHttpTest extends ContractChecks {
             .andExpect(header().string("Content-Type", "application/pdf"))
             .andExpect(header().string("Cache-Control", "no-store")).andReturn().getResponse().getContentAsByteArray();
         org.assertj.core.api.Assertions.assertThat(new String(pdf, java.nio.charset.Charset.forName("windows-1252")))
-            .contains("No es una factura fiscal certificada.", "Total COP: 100.00", "Saldo COP: 100.00");
+            .contains("No es una factura fiscal certificada.", "Saldo pendiente", "$ 100,00", "Detalle de productos");
         as(get(base + "/pdf"), "OPTOMETRIST").andExpect(status().isForbidden());
         mvc.perform(get(base + "/pdf")).andExpect(status().isUnauthorized());
         String proof = "{\"amountCents\":100,\"method\":\"TRANSFER\",\"receipt\":{\"contentType\":\"application/pdf\",\"base64\":\"JVBERi0xLjQK\"}}";
