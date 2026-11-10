@@ -174,7 +174,7 @@ class SalesHttpTest extends ContractChecks {
                 .andExpect(jsonPath("$.status").value("PARTIAL"))
                 .andExpect(jsonPath("$.paidCents").value(60_000))
                 .andExpect(jsonPath("$.balanceCents").value(40_000));
-        as(payment(invoiceId, "{\"amountCents\":40000,\"method\":\"NEQUI\"}", "pay-" + UUID.randomUUID()), "ADMIN")
+        as(payment(invoiceId, "{\"amountCents\":40000,\"method\":\"NEQUI\",\"receipt\":{\"contentType\":\"application/pdf\",\"base64\":\"JVBERi0xLjQKJSBQcnVlYmEK\"}}", "pay-" + UUID.randomUUID()), "ADMIN")
                 .andExpect(status().isCreated());
         as(get("/api/v1/invoices/" + invoiceId), "SELLER").andExpect(jsonPath("$.status").value("PAID"));
         as(get("/api/v1/invoices/" + invoiceId + "/payments"), "SELLER")
@@ -221,6 +221,58 @@ class SalesHttpTest extends ContractChecks {
         as(get("/api/v1/invoices?colour=red"), "ADMIN").andExpect(status().isBadRequest());
         as(get("/api/v1/invoices/not-a-uuid"), "ADMIN").andExpect(status().isBadRequest());
         as(get("/api/v1/invoices/" + UUID.randomUUID()), "ADMIN").andExpect(status().isNotFound());
+    }
+
+    @Test
+    void invoicePdfAndEvidenceDownloadsEnforceRolesAndInvoiceScope() throws Exception {
+        var seller = UUID.randomUUID();
+        var stranger = UUID.randomUUID();
+        String body = orderJson("pdf-test", 10000L, 1).replaceFirst("\\{", "{\"sellerId\":\"" + seller + "\",");
+        String invoice = invoiceOf(open(body));
+        String base = "/api/v1/invoices/" + invoice;
+        var pdf = mvc.perform(get(base + "/pdf").header("Authorization",
+            "Bearer " + TestTokens.validAs(clock.instant(), seller.toString(), "SELLER"))).andExpect(status().isOk())
+            .andExpect(header().string("Content-Type", "application/pdf"))
+            .andExpect(header().string("Cache-Control", "no-store")).andReturn().getResponse().getContentAsByteArray();
+        org.assertj.core.api.Assertions.assertThat(new String(pdf, java.nio.charset.Charset.forName("windows-1252")))
+            .contains("No es una factura fiscal certificada.", "Saldo pendiente", "$ 100,00", "Detalle de productos");
+        as(get(base + "/pdf"), "OPTOMETRIST").andExpect(status().isForbidden());
+        mvc.perform(get(base + "/pdf")).andExpect(status().isUnauthorized());
+        String proof = "{\"amountCents\":100,\"method\":\"TRANSFER\",\"receipt\":{\"contentType\":\"application/pdf\",\"base64\":\"JVBERi0xLjQK\"}}";
+        String payment = idOf(as(payment(invoice, proof, "proof-" + UUID.randomUUID()), "SELLER")
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String url = base + "/payments/" + payment + "/receipt";
+        as(get(url), "ADMIN").andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
+        String ownerToken = "Bearer " + TestTokens.validAs(clock.instant(), seller.toString(), "SELLER");
+        String strangerToken = "Bearer " + TestTokens.validAs(clock.instant(), stranger.toString(), "SELLER");
+        mvc.perform(get(url).header("Authorization", ownerToken)).andExpect(status().isOk());
+        mvc.perform(get(url).header("Authorization", strangerToken)).andExpect(status().isForbidden());
+        mvc.perform(get(base + "/pdf").header("Authorization", strangerToken)).andExpect(status().isForbidden());
+        as(get(url), "OPTOMETRIST").andExpect(status().isForbidden());
+        mvc.perform(get(url)).andExpect(status().isUnauthorized());
+        String other = invoiceOf(open(orderJson("other-proof", 10000L, 1)));
+        as(get("/api/v1/invoices/" + other + "/payments/" + payment + "/receipt"), "ADMIN").andExpect(status().isNotFound());
+    }
+
+    @Test
+    void httpElectronicPaymentRequiresChallengeAndAllowsOnlyIdempotentReplay() throws Exception {
+        for (String method : List.of("PSE", "CARD")) {
+            String invoice = invoiceOf(open(orderJson("otp-" + method, 10000L, 1)));
+            String payload = "{\"amountCents\":100,\"method\":\"" + method + "\",\"reference\":\"PRUEBA\"}";
+            as(payment(invoice, payload, "otp-" + UUID.randomUUID()), "SELLER").andExpect(status().isBadRequest());
+            var start = post("/api/v1/invoices/" + invoice + "/payment-challenges").contentType(MediaType.APPLICATION_JSON).content(payload);
+            var result = as(start, "SELLER").andExpect(status().isOk()).andExpect(jsonPath("$.mode").value(containsString("SMS SIMULADO")))
+                .andReturn().getResponse().getContentAsString();
+            var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result);
+            String confirmation = payload.substring(0, payload.length() - 1) + ",\"challengeId\":\"" + json.get("id").asText()
+                + "\",\"otp\":\"" + json.get("testCode").asText() + "\"}";
+            String key = "otp-" + UUID.randomUUID();
+            as(payment(invoice, confirmation, key), "SELLER").andExpect(status().isCreated());
+            as(payment(invoice, confirmation, key), "SELLER").andExpect(status().isOk());
+            as(payment(invoice, confirmation, "otp-" + UUID.randomUUID()), "SELLER").andExpect(status().isBadRequest());
+            as(get("/api/v1/invoices/" + invoice + "/payments"), "SELLER").andExpect(jsonPath("$.meta.total").value(1))
+                .andExpect(jsonPath("$.data[0].gatewayTransactionId").value(org.hamcrest.Matchers.startsWith("SANDBOX-")));
+        }
     }
 
     // ---- helpers --------------------------------------------------------------------------
