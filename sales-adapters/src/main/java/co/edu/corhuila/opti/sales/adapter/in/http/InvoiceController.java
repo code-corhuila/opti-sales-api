@@ -59,26 +59,33 @@ class InvoiceController {
         var invoice = useCases.get(RequestRules.uuid(id, "id"));
         var order = orders.get(invoice.workOrderId());
         requireInvoiceOwner(http, order);
-        var lines = new java.util.ArrayList<String>();
-        lines.add("OptiView - Factura " + invoice.number());
-        lines.add("Documento interno. No es una factura fiscal certificada.");
-        lines.add("Fecha: " + invoice.createdAt());
-        lines.add("Orden: " + order.number());
-        lines.add("Paciente (identificador): " + invoice.patientId());
-        lines.add("Estado: " + invoice.status());
-        for (var item : order.items()) {
-            lines.add(item.sku() + " - " + item.description());
-            lines.add("Cantidad: " + item.quantity() + " | Unitario COP: " + money(item.unitPriceCents())
-                + " | Subtotal COP: " + money(item.subtotalCents()));
-        }
-        lines.add("Total COP: " + money(invoice.totalCents()));
-        lines.add("Abonado COP: " + money(invoice.paidCents()));
-        lines.add("Saldo COP: " + money(invoice.balanceCents()));
-        return PdfDocument.download("factura-" + invoice.id() + ".pdf", lines);
+        var pdf = new PdfDocument("Factura " + invoice.number(), "Documento interno de venta  /  Valores en COP");
+        pdf.section("Datos de la factura");
+        var date = java.time.format.DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")
+                .withZone(java.time.ZoneId.of("America/Bogota")).format(invoice.createdAt());
+        var status = switch (invoice.status()) {
+            case PENDING -> "Pendiente";
+            case PARTIAL -> "Abonada parcialmente";
+            case PAID -> "Pagada";
+            case VOID -> "Anulada";
+        };
+        pdf.fields("Orden de trabajo", order.number(), "Fecha de emisión (Colombia)", date,
+                "Referencia del paciente", invoice.patientId().toString(), "Estado", status);
+        pdf.section("Detalle de productos");
+        pdf.table(new String[]{"SKU", "Producto", "Cant.", "Unitario", "Subtotal"},
+                new int[]{100, 168, 43, 100, 100},
+                order.items().stream().map(item -> java.util.List.of(item.sku(), item.description(),
+                        Integer.toString(item.quantity()), money(item.unitPriceCents()), money(item.subtotalCents()))).toList());
+        pdf.totals(money(invoice.totalCents()), money(invoice.paidCents()), money(invoice.balanceCents()));
+        pdf.note("No es una factura fiscal certificada.");
+        return pdf.download("factura-" + invoice.id() + ".pdf");
     }
 
     private static String money(long cents) {
-        return java.math.BigDecimal.valueOf(cents, 2).toPlainString();
+        var format = java.text.NumberFormat.getNumberInstance(java.util.Locale.forLanguageTag("es-CO"));
+        format.setMinimumFractionDigits(2);
+        format.setMaximumFractionDigits(2);
+        return "$ " + format.format(java.math.BigDecimal.valueOf(cents, 2));
     }
 
     @PostMapping("/{id}/payments")
