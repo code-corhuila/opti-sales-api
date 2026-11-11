@@ -51,6 +51,8 @@ class JdbcRepositoriesIntegrationTest {
 
     private static final UUID PATIENT = UUID.fromString("11111111-1111-4111-8111-111111111111");
 
+    private static JdbcClient jdbc;
+    private static TransactionTemplate transaction;
     private static WorkOrderUseCases orders;
     private static InvoiceUseCases invoices;
 
@@ -58,8 +60,8 @@ class JdbcRepositoriesIntegrationTest {
     static void connect() {
         var dataSource = new DriverManagerDataSource(System.getenv("TEST_DATABASE_URL"));
         dataSource.setSchema("sales");
-        var jdbc = JdbcClient.create(dataSource);
-        var transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        jdbc = JdbcClient.create(dataSource);
+        transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         var keys = new IdempotencyKeys(jdbc);
         var ids = new UuidGenerator();
         var unit = new JdbcUnitOfWork(transaction);
@@ -68,6 +70,36 @@ class JdbcRepositoriesIntegrationTest {
                 new JdbcNumberSequence(jdbc), keys, ids, unit, Clock.systemUTC());
         invoices = new InvoiceService(invoiceRepository, new JdbcPaymentRepository(jdbc), new SandboxPaymentGateway(),
                 keys, ids, unit, Clock.systemUTC());
+    }
+
+    @Test
+    void privateReceiptSurvivesNewStoreAndRollsBackWithFailedPayment() {
+        var invoice = invoiceOf(orders.open(order(10_000L, 1, 10_000L, 1), key()).value());
+        var data = new Payment.Data(100L, PaymentMethod.TRANSFER, "PRUEBA");
+        var docs = new JdbcPaymentDocuments(jdbc, transaction);
+        var receipt = new co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard.Receipt("application/pdf", "JVBERi0xLjQK");
+        var guard = new co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard(Clock.systemUTC(), docs);
+        String key = key();
+        // Deliberate failure after payment insert: outer receipt transaction must undo it all.
+        assertThatThrownBy(() -> docs.transaction(() -> {
+            var paid = invoices.pay(invoice.id(), data, key);
+            docs.save(paid.value().id(), invoice.id(), new co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard.Document("text/html", new byte[]{1}));
+            return paid;
+        })).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(invoices.get(invoice.id()).paidCents()).isZero();
+        assertThat(invoices.payments(invoice.id(), PageQuery.first(10)).total()).isZero();
+        var paid = guard.pay("test-user", invoice.id(), data, key, null, null, receipt,
+            () -> invoices.pay(invoice.id(), data, key));
+        var reopened = new JdbcPaymentDocuments(jdbc, transaction);
+        assertThat(reopened.exists(paid.value().id(), invoice.id())).isTrue();
+        assertThat(reopened.get(paid.value().id(), invoice.id()).orElseThrow().bytes()).startsWith((byte)37, (byte)80, (byte)68, (byte)70);
+        assertThat(reopened.get(paid.value().id(), UUID.randomUUID())).isEmpty();
+        var retry = guard.pay("test-user", invoice.id(), data, key, null, null, receipt,
+            () -> invoices.pay(invoice.id(), data, key));
+        assertThat(retry.created()).isFalse();
+        assertThat(invoices.get(invoice.id()).paidCents()).isEqualTo(100);
+        assertThatThrownBy(() -> invoices.pay(invoice.id(), new Payment.Data(101L, PaymentMethod.TRANSFER, "PRUEBA"), key))
+            .isInstanceOf(DomainException.class);
     }
 
     @Test
