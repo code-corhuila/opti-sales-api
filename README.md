@@ -58,3 +58,22 @@ Declared in `sales-app/src/main/resources/application.yml`: header/read timeout 
 ## Depends on
 
 `opti-sales-db` (its own PostgreSQL instance) and the public key of the identity service.
+
+## PDF y pagos de prueba
+
+`GET /api/v1/invoices/{id}/pdf` descarga un PDF interno con factura, orden, líneas y totales COP; **no es una factura fiscal certificada**. Solo ADMIN/SELLER. El paciente se identifica por el UUID que pertenece a la factura; este servicio no consulta otra base de datos.
+
+PSE/CARD requieren `POST /api/v1/invoices/{id}/payment-challenges` con `amountCents`, `method` y `reference` opcional. Devuelve `id`, `testCode`, `expiresAt` y un rótulo **SMS SIMULADO - SOLO PRUEBAS, SIN COBRO**. Confirmar en el endpoint existente `/payments`, añadiendo `challengeId` y `otp`. No recibe teléfono, número de tarjeta, CVV ni datos bancarios. El código se almacena como hash, caduca a los 180 segundos y admite 3 intentos; queda vinculado a usuario, factura, monto, método y referencia. Un código usado no permite otro pago; reintentar con la misma clave idempotente devuelve el resultado original. El proveedor configurado previamente no se conecta: la composición usa exclusivamente el gateway local. La referencia ficticia terminada en `0000` permite probar un rechazo del simulador.
+
+TRANSFER/NEQUI/DAVIPLATA requieren `receipt: {contentType, base64}` en `/payments`. Solo PDF/PNG/JPEG, de 1 byte a 2 MiB; se contrastan MIME y firma del contenido. No se acepta HTML/SVG ni rutas de archivos. El comprobante y el pago se guardan en **la misma transacción**. `GET /api/v1/invoices/{id}/payments/{paymentId}/receipt` exige ADMIN/SELLER y coincidencia de factura. Se descarga como attachment con `no-store`/`nosniff`, nunca por una URL pública. La lista de pagos agrega `hasReceipt`; los pagos históricos sin adjunto siguen consultables. CASH/OTHER mantienen su flujo; las claves idempotentes no pueden reutilizarse para otros parámetros de pago.
+
+### Compatibilidad y límites
+
+- Aplicar primero `opti-sales-db` V020; después actualizar API/gateway y contenedor/portales de forma coordinada. Clientes antiguos que registren transferencias o medios electrónicos deben adoptar estos campos obligatorios. Los registros históricos no se modifican.
+- El OTP es un **simulador de una sola instancia**: máximo 1000 desafíos retenidos, sin distribución ni SMS. Reiniciar pierde los desafíos y sus respuestas en memoria; un desafío antiguo falla de forma cerrada. Los pagos y comprobantes permanecen en PostgreSQL; consultar el historial antes de iniciar otra operación tras una respuesta incierta o reinicio. La respuesta idempotente de un OTP usado se conserva mientras el desafío siga retenido (hasta 13 minutos).
+- Se valida tipo/firma/tamaño, sin antivirus ni certificación de autenticidad del comprobante. Los usuarios autorizados deben abrir únicamente comprobantes ficticios en estas pruebas.
+- El PDF es una representación de texto con paginación y caracteres españoles (WinAnsi); no contiene firma digital, certificación fiscal ni códigos de autorización tributaria. No incorpora imágenes ni tipografías Unicode completas.
+
+### Verificación
+
+`mvn -B verify` cubre dominio, HTTP, caducidad, intentos, vinculación, concurrencia, reutilización, permisos, PDF y archivos inválidos. Con `TEST_DATABASE_URL` apuntando exclusivamente a una base aislada con las migraciones de ventas, también ejecuta persistencia real, idempotencia y rollback conjunto del pago/comprobante. No usar registros ni conexiones reales para estas pruebas. En cloud se ejecutaron 74 tests sin fallos ni omisiones, además de lectura independiente del PDF con `pdftotext`.
