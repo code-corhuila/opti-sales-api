@@ -10,8 +10,8 @@ public enum PaymentMethod {
     DAVIPLATA,
     OTHER;
 
-    /** CARD, PSE, NEQUI and DAVIPLATA are authorized through the payment gateway; the rest are a manual entry. */
+    /** CARD and PSE use the local test gateway; wallets and transfers are manually evidenced. */
     public boolean isElectronic() {
-        return this == CARD || this == PSE || this == NEQUI || this == DAVIPLATA;
+        return this == CARD || this == PSE;
     }
 }

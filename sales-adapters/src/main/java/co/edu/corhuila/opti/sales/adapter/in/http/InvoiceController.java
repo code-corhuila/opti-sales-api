@@ -29,9 +29,13 @@ class InvoiceController {
     private static final String INVOICES = "/api/v1/invoices";
 
     private final InvoiceUseCases useCases;
+    private final PaymentGuard guard;
+    private final co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases orders;
 
-    InvoiceController(InvoiceUseCases useCases) {
+    InvoiceController(InvoiceUseCases useCases, co.edu.corhuila.opti.sales.application.port.in.WorkOrderUseCases orders, PaymentGuard guard) {
         this.useCases = useCases;
+        this.orders = orders;
+        this.guard = guard;
     }
 
     @GetMapping
@@ -49,14 +53,76 @@ class InvoiceController {
         return InvoiceResponse.from(useCases.get(RequestRules.uuid(id, "id")));
     }
 
+    @GetMapping("/{id}/pdf")
+    ResponseEntity<byte[]> pdf(HttpServletRequest http, @PathVariable String id) {
+        RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        var invoice = useCases.get(RequestRules.uuid(id, "id"));
+        var order = orders.get(invoice.workOrderId());
+        requireInvoiceOwner(http, order);
+        var pdf = new PdfDocument("Factura " + invoice.number(), "Documento interno de venta  /  Valores en COP");
+        pdf.section("Datos de la factura");
+        var date = java.time.format.DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")
+                .withZone(java.time.ZoneId.of("America/Bogota")).format(invoice.createdAt());
+        var status = switch (invoice.status()) {
+            case PENDING -> "Pendiente";
+            case PARTIAL -> "Abonada parcialmente";
+            case PAID -> "Pagada";
+            case VOID -> "Anulada";
+        };
+        pdf.fields("Orden de trabajo", order.number(), "Fecha de emisión (Colombia)", date,
+                "Referencia del paciente", invoice.patientId().toString(), "Estado", status);
+        pdf.section("Detalle de productos");
+        pdf.table(new String[]{"SKU", "Producto", "Cant.", "Unitario", "Subtotal"},
+                new int[]{100, 168, 43, 100, 100},
+                order.items().stream().map(item -> java.util.List.of(item.sku(), item.description(),
+                        Integer.toString(item.quantity()), money(item.unitPriceCents()), money(item.subtotalCents()))).toList());
+        pdf.totals(money(invoice.totalCents()), money(invoice.paidCents()), money(invoice.balanceCents()));
+        pdf.note("No es una factura fiscal certificada.");
+        return pdf.download("factura-" + invoice.id() + ".pdf");
+    }
+
+    private static String money(long cents) {
+        var format = java.text.NumberFormat.getNumberInstance(java.util.Locale.forLanguageTag("es-CO"));
+        format.setMinimumFractionDigits(2);
+        format.setMaximumFractionDigits(2);
+        return "$ " + format.format(java.math.BigDecimal.valueOf(cents, 2));
+    }
+
     @PostMapping("/{id}/payments")
     ResponseEntity<Responses.CreatedBody> pay(HttpServletRequest http, @PathVariable String id,
             @RequestHeader(value = "Idempotency-Key", required = false) String key,
             @RequestBody PaymentRequest body) {
         RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
         UUID invoiceId = RequestRules.uuid(id, "id");
-        var result = useCases.pay(invoiceId, body.toData(), key);
+        var result = guard.pay(RequestRules.caller(http).subject(), invoiceId, body.toData(), key,
+            body.challengeId(), body.otp(), body.receipt(), () -> useCases.pay(invoiceId, body.toData(), key));
         return Responses.created(result, result.value().id(), INVOICES + "/" + invoiceId + "/payments");
+    }
+
+    record ChallengeRequest(Long amountCents, co.edu.corhuila.opti.sales.domain.model.PaymentMethod method, String reference) { }
+
+    @PostMapping("/{id}/payment-challenges")
+    ResponseEntity<PaymentGuard.Challenge> challenge(HttpServletRequest http, @PathVariable String id, @RequestBody ChallengeRequest body) {
+        var user = RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        UUID invoiceId = RequestRules.uuid(id, "id");
+        var invoice = useCases.get(invoiceId);
+        var data = new co.edu.corhuila.opti.sales.domain.model.Payment.Data(body.amountCents(), body.method(), body.reference());
+        co.edu.corhuila.opti.sales.domain.model.Payment.check(data);
+        if (invoice.status() == InvoiceStatus.VOID || body.amountCents() > invoice.balanceCents())
+            throw ApiException.validation("amountPesos", "El monto supera el saldo o la factura está anulada.");
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(guard.start(user.subject(), invoiceId, data));
+    }
+
+    @GetMapping("/{id}/payments/{paymentId}/receipt")
+    ResponseEntity<byte[]> receipt(HttpServletRequest http, @PathVariable String id, @PathVariable String paymentId) {
+        RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        var invoiceId = RequestRules.uuid(id, "id");
+        requireInvoiceOwner(http, orders.get(useCases.get(invoiceId).workOrderId()));
+        var document = guard.receipt(RequestRules.uuid(paymentId, "paymentId"), invoiceId);
+        String extension = document.contentType().equals("application/pdf") ? "pdf" : document.contentType().equals("image/png") ? "png" : "jpg";
+        return ResponseEntity.ok().header("Content-Type", document.contentType())
+            .header("Content-Disposition", "attachment; filename=\"comprobante-" + paymentId + "." + extension + "\"")
+            .header("Cache-Control", "no-store").header("X-Content-Type-Options", "nosniff").body(document.bytes());
     }
 
     @GetMapping("/{id}/payments")
@@ -64,7 +130,16 @@ class InvoiceController {
             @RequestParam(required = false) String page, @RequestParam(required = false) String limit) {
         RequestRules.onlyParams(http, "page", "limit");
         return PageResponse.of(useCases.payments(RequestRules.uuid(id, "id"), RequestRules.page(page, limit))
-                .map(PaymentResponse::from));
+                .map(p -> PaymentResponse.from(p, guard.hasReceipt(p.id(), p.invoiceId()))));
+    }
+
+    private static void requireInvoiceOwner(HttpServletRequest http,
+            co.edu.corhuila.opti.sales.domain.model.WorkOrder order) {
+        var user = RequestRules.requireRole(http, Roles.ADMIN, Roles.SELLER);
+        if (!user.hasAnyRole(Roles.ADMIN)
+                && (order.sellerId() == null || !order.sellerId().toString().equals(user.subject()))) {
+            throw ApiException.forbidden();
+        }
     }
 
     private static InvoiceStatus parseStatus(String value) {

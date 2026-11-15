@@ -1,0 +1,316 @@
+openapi: 3.0.3
+info:
+  title: 'OptiView invoices: PDF and simulated payments'
+  version: 1.1.0
+  description: Contrato de facturas/pagos añadido a los endpoints existentes del README.
+    Sin SMS, cobros, tarjetas ni proveedores reales. OTP local de una instancia; tras
+    reinicio revisar historial antes de iniciar otro pago. Métodos históricos y datos
+    existentes siguen consultables.
+security:
+- bearerAuth: []
+paths:
+  /api/v1/invoices/{id}/pdf:
+    get:
+      summary: Factura interna PDF, ADMIN/SELLER. No es factura fiscal certificada.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Líneas y totales COP. Attachment, no-store, nosniff. Paciente
+            identificado por UUID.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400': &id001
+          description: Campos inválidos, comprobante ausente o código inválido/caducado/usado.
+        '401': &id002
+          description: Sesión ausente o inválida.
+        '403': &id003
+          description: Rol no autorizado.
+        '404': &id004
+          description: Recurso inexistente o no pertenece a esta factura.
+        '422': &id005
+          description: Saldo o estado de factura no permite el pago.
+  /api/v1/invoices/{id}/payment-challenges:
+    post:
+      summary: Generar SMS exclusivamente simulado, ADMIN/SELLER.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Código de prueba; no-store. Caduca en 180 s, 3 intentos, ligado
+            al usuario/factura/monto/método/referencia.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '422': *id005
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeRequest'
+  /api/v1/invoices/{id}/payments:
+    post:
+      summary: Registrar pago (ADMIN/SELLER), con OTP o comprobante según método.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+      responses:
+        '201':
+          description: Pago nuevo; Location apunta al pago.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '200':
+          description: Reintento idempotente; no registra otro pago.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Created'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '422': *id005
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+    get:
+      summary: Historial de pagos, visibilidad autenticada existente.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: 'Página de pagos: {data, meta}.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  meta:
+                    type: object
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '422': *id005
+  /api/v1/invoices/{id}/payments/{paymentId}/receipt:
+    get:
+      summary: Descargar comprobante privado, ADMIN/SELLER y factura coincidente.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Attachment; no-store y nosniff.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '422': *id005
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Receipt:
+      type: object
+      required:
+      - contentType
+      - base64
+      additionalProperties: false
+      properties:
+        contentType:
+          type: string
+          enum:
+          - application/pdf
+          - image/png
+          - image/jpeg
+        base64:
+          type: string
+          format: byte
+          maxLength: 2796204
+      description: Archivo ficticio de 1 byte a 2 MiB. MIME y firma del archivo deben
+        coincidir. Persistido atómicamente con el pago.
+    PaymentRequest:
+      type: object
+      required:
+      - amountCents
+      - method
+      additionalProperties: false
+      properties:
+        amountCents: &id006
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+        method: &id009
+          type: string
+          enum:
+          - CASH
+          - CARD
+          - TRANSFER
+          - PSE
+          - NEQUI
+          - DAVIPLATA
+          - OTHER
+        reference: &id007
+          type: string
+          maxLength: 100
+          nullable: true
+        challengeId: &id008
+          type: string
+          format: uuid
+        otp:
+          type: string
+          pattern: ^[0-9]{6}$
+        receipt:
+          $ref: '#/components/schemas/Receipt'
+      oneOf:
+      - properties:
+          method:
+            enum:
+            - CARD
+            - PSE
+        required:
+        - challengeId
+        - otp
+      - properties:
+          method:
+            enum:
+            - TRANSFER
+            - NEQUI
+            - DAVIPLATA
+        required:
+        - receipt
+      - properties:
+          method:
+            enum:
+            - CASH
+            - OTHER
+    ChallengeRequest:
+      type: object
+      required:
+      - amountCents
+      - method
+      additionalProperties: false
+      properties:
+        amountCents: *id006
+        method:
+          type: string
+          enum:
+          - PSE
+          - CARD
+        reference: *id007
+    Challenge:
+      type: object
+      properties:
+        id: *id008
+        testCode:
+          type: string
+          pattern: ^[0-9]{6}$
+        expiresAt:
+          type: string
+          format: date-time
+        mode:
+          type: string
+          example: SMS SIMULADO - SOLO PRUEBAS, SIN COBRO
+    Created:
+      type: object
+      properties:
+        id: *id008
+    Payment:
+      type: object
+      properties:
+        id: *id008
+        invoiceId: *id008
+        amountCents: *id006
+        method: *id009
+        reference: *id007
+        gatewayTransactionId:
+          type: string
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+        hasReceipt:
+          type: boolean
+          description: False para pagos históricos sin adjunto.

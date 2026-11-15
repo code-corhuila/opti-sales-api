@@ -15,7 +15,7 @@ public class ApiException extends RuntimeException {
     }
 
     public static ApiException validation(String field, String message) {
-        return new ApiException(ErrorCode.VALIDATION_ERROR, "the request has invalid fields",
+        return new ApiException(ErrorCode.VALIDATION_ERROR, "Revisa los campos indicados.",
                 List.of(new ApiError.Detail(field, message)));
     }
 

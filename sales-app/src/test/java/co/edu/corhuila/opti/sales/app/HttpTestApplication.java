@@ -34,13 +34,24 @@ class HttpTestApplication {
     }
 
     @Bean
+    co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard paymentGuard(TestClock clock) {
+        return new co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard(clock, new co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard.Store() {
+            private final java.util.Map<String, co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard.Document> documents = new java.util.HashMap<>();
+            public <T> T transaction(java.util.function.Supplier<T> work) { return work.get(); }
+            public void save(java.util.UUID payment, java.util.UUID invoice, co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard.Document doc) { documents.put(invoice + ":" + payment, doc); }
+            public boolean exists(java.util.UUID payment, java.util.UUID invoice) { return documents.containsKey(invoice + ":" + payment); }
+            public java.util.Optional<co.edu.corhuila.opti.sales.adapter.in.http.PaymentGuard.Document> get(java.util.UUID payment, java.util.UUID invoice) { return java.util.Optional.ofNullable(documents.get(invoice + ":" + payment)); }
+        });
+    }
+
+    @Bean
     PublicPaths publicPaths() {
         return PublicPaths.with();
     }
 
     @Bean
     Fixtures.Sales sales(TestClock clock) {
-        return Fixtures.sales(clock);
+        return Fixtures.sales(clock, new co.edu.corhuila.opti.sales.adapter.out.gateway.SandboxPaymentGateway());
     }
 
     @Bean

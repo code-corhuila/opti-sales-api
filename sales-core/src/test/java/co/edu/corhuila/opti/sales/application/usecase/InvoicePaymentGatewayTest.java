@@ -69,6 +69,17 @@ class InvoicePaymentGatewayTest {
     }
 
     @Test
+    void approvalWithoutTransactionEvidenceDoesNotChangeTheInvoice() {
+        gateway.includeTransactionId = false;
+        assertThatThrownBy(() -> sales.invoices().pay(invoice.id(),
+                new Payment.Data(invoice.totalCents(), PaymentMethod.PSE, null), "pay-no-proof"))
+                .isInstanceOfSatisfying(DomainException.class, e ->
+                        assertThat(e.kind()).isEqualTo(ErrorKind.BUSINESS_RULE_VIOLATION));
+        assertThat(sales.invoices().get(invoice.id()).paidCents()).isZero();
+        assertThat(sales.invoices().payments(invoice.id(), PageQuery.first(10)).total()).isZero();
+    }
+
+    @Test
     void retryingWithTheSameKeyAfterADeclineCanStillSucceed() {
         gateway.approve = false;
         assertThatThrownBy(() -> sales.invoices()
